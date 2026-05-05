@@ -1,21 +1,32 @@
 schema: spec-driven
 
-
-# Project context (optional)
+# Project context
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Tech stack: ReactJS (Web), React Native + SQLite (Mobile), NestJS (Backend API), PostgreSQL 15+, Redis 7+, RabbitMQ 3.x, Python (AI Processor), and Node.js (Workers).
+  Architecture: Modular Monolith combined with Event-Driven, deployed as a 3-tier model.
+  Domain: University workshop management system (UniHub Workshop) handling high-concurrency event registration, ticketing, offline check-ins, and AI-powered PDF summaries.
+  Key constraints: System must handle sudden traffic spikes (12,000 users in 10 minutes), strictly prevent seat overbooking, and ensure data integrity during offline check-ins.
+  External integrations: Mock Payment Gateway (VNPay/Stripe), external AI Model APIs (OpenAI/Local LLM), and one-way nightly CSV imports from Legacy SIS.
 
-# Per-artifact rules (optional)
+# Per-artifact rules
 # Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  backend_api:
+    - Must implement Distributed Locks (via Redis) to manage ticket slots and strictly prevent overbooking race conditions.
+    - Must enforce Rate Limiting (100 req/10s per user) at the gateway layer.
+    - Use Idempotency Keys (cached in Redis for 24h) for registration and payment endpoints to prevent duplicate transactions.
+    - Implement Circuit Breaker patterns for Payment Gateway integrations to ensure the core system survives third-party failures.
+
+  mobile_app:
+    - Must follow an offline-first approach.
+    - Store pending check-ins locally using SQLite when network is unavailable.
+    - Implement a background sync worker to batch POST pending check-ins idempotently when connectivity is restored.
+
+  database_and_caching:
+    - Strictly separate Data Layer: PostgreSQL for relational source of truth, Redis for in-memory operations (Slot caching, rate-limit counters, locks).
+    - Use UPSERT statements (`INSERT ... ON CONFLICT DO UPDATE`) for nightly CSV data imports to avoid table-locking and system downtime.
+
+  async_workers:
+    - Do not block HTTP requests for heavy tasks like email/push notifications or AI PDF extraction.
+    - Use RabbitMQ as a message broker to publish events (`notify.*`, `ai.pdf.*`) to background worker services.
