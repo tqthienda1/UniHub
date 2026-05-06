@@ -6,20 +6,25 @@ import { WorkshopsModule } from './workshops/workshops.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { RedisModule } from './redis/redis.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     BullModule.forRoot({
       redis: {
-        host: 'localhost',
-        port: 6379,
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
       },
     }),
     WorkshopsModule,
     PrismaModule,
     UsersModule,
     AuthModule,
+    RedisModule,
   ],
+
   controllers: [AppController],
   providers: [AppService],
 })
