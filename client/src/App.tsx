@@ -1,24 +1,33 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ProtectedRoute from './components/ProtectedRoute';
 import EditWorkshop from './workshops/EditWorkshop';
 import WorkshopDetails from './workshops/WorkshopDetails';
 
-function App() {
-  // Demo workshop ID
+const Dashboard = () => {
+  const { user, logout } = useAuth();
   const demoWorkshopId = '123e4567-e89b-12d3-a456-426614174000';
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-7xl mx-auto space-y-12">
-        <header className="text-center animate-in fade-in slide-in-from-top duration-700">
-          <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-widest mb-6">
-            New Feature: AI Summarization
+        <header className="flex justify-between items-center animate-in fade-in slide-in-from-top duration-700">
+          <div>
+            <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold uppercase tracking-widest mb-4">
+              Welcome back, {user?.fullName}
+            </div>
+            <h1 className="text-4xl font-black text-gray-900 tracking-tight sm:text-5xl">
+              UniHub <span className="text-indigo-600">AI</span> Workshops
+            </h1>
           </div>
-          <h1 className="text-5xl font-black text-gray-900 tracking-tight sm:text-6xl">
-            UniHub <span className="text-indigo-600">AI</span> Workshops
-          </h1>
-          <p className="mt-6 text-xl text-gray-500 max-w-3xl mx-auto leading-relaxed">
-            Revolutionizing how students consume workshop content. Upload a PDF, and let our 
-            <span className="text-indigo-600 font-bold"> Gemini-powered</span> engine do the heavy lifting.
-          </p>
+          <button 
+            onClick={logout}
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold transition-colors"
+          >
+            Logout
+          </button>
         </header>
 
         <main className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start animate-in fade-in zoom-in duration-1000 delay-300">
@@ -54,7 +63,7 @@ function App() {
           </p>
           <div className="flex items-center justify-center space-x-2 text-gray-300">
             <span>Powered by</span>
-            <span className="font-bold text-gray-400">Google Gemini 1.5 Flash</span>
+            <span className="font-bold text-gray-400">Google Gemini</span>
             <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
             <span>NestJS</span>
             <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
@@ -65,5 +74,23 @@ function App() {
     </div>
   );
 }
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/" element={<Dashboard />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
+  );
+}
+
 
 export default App;
