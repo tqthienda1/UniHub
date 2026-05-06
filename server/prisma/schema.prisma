@@ -15,6 +15,20 @@ enum Role {
   ADMIN
 }
 
+enum WorkshopStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  CANCELLED
+  EXPIRED
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -25,43 +39,52 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  registrations Registration[]
+  registrations WorkshopRegistration[]
 
   @@map("users")
 }
 
 model Workshop {
-  id             String   @id @default(uuid())
+  id             String         @id @default(uuid())
   title          String
-  speakerInfo    String?  @map("speaker_info")
+  description    String?
+  category       String?
+  speakerInfo    String?        @map("speaker_info")
+  location       String?
   room           String
-  startTime      DateTime @map("start_time")
+  startTime      DateTime       @map("start_time")
+  endTime        DateTime?      @map("end_time")
   capacity       Int
-  availableSlots Int      @map("available_slots")
-  price          Decimal  @default(0)
-  aiSummary      String?  @map("ai_summary")
-  status         String   @default("active")
+  availableSeats Int            @default(0) @map("available_seats")
+  price          Decimal        @default(0)
+  aiSummary      String?        @map("ai_summary")
+  status         WorkshopStatus @default(DRAFT)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at")
 
-  registrations Registration[]
-  checkins      CheckIn[]
+
+  registrations WorkshopRegistration[]
+  checkins      WorkshopCheckIn[]
 
   @@map("workshops")
 }
 
-model Registration {
-  id         String   @id @default(uuid())
-  userId     String   @map("user_id")
-  workshopId String   @map("workshop_id")
-  status     String
-  qrHash     String   @unique @map("qr_hash")
-  createdAt  DateTime @default(now()) @map("created_at")
+model WorkshopRegistration {
+  id         String             @id @default(uuid())
+  userId     String             @map("user_id")
+  workshopId String             @map("workshop_id")
+  status     RegistrationStatus @default(PENDING)
+  qrToken    String?            @unique @map("qr_token")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
 
-  user     User     @relation(fields: [userId], references: [id])
-  workshop Workshop @relation(fields: [workshopId], references: [id])
+  user     User             @relation(fields: [userId], references: [id])
+  workshop Workshop         @relation(fields: [workshopId], references: [id])
+  checkin  WorkshopCheckIn?
   payments Payment[]
 
   @@unique([userId, workshopId])
-  @@map("registrations")
+  @@map("workshop_registrations")
 }
 
 model Payment {
@@ -72,19 +95,20 @@ model Payment {
   transactionId  String?  @map("transaction_id")
   createdAt      DateTime @default(now()) @map("created_at")
 
-  registration Registration @relation(fields: [registrationId], references: [id])
+  registration WorkshopRegistration @relation(fields: [registrationId], references: [id])
 
   @@map("payments")
 }
 
-model CheckIn {
-  id         String   @id @default(uuid())
-  qrHash     String   @map("qr_hash")
-  workshopId String   @map("workshop_id")
-  scannedAt  DateTime @map("scanned_at")
-  status     String
+model WorkshopCheckIn {
+  id             String   @id @default(uuid())
+  registrationId String   @unique @map("registration_id")
+  workshopId     String   @map("workshop_id")
+  scannedAt      DateTime @default(now()) @map("scanned_at")
 
-  workshop Workshop @relation(fields: [workshopId], references: [id])
+  registration WorkshopRegistration @relation(fields: [registrationId], references: [id])
+  workshop     Workshop             @relation(fields: [workshopId], references: [id])
 
-  @@map("checkins")
+  @@map("workshop_checkins")
 }
+
