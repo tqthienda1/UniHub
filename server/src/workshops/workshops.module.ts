@@ -4,6 +4,11 @@ import { WorkshopsController } from './workshops.controller';
 import { WorkshopsService } from './workshops.service';
 import { AiSummaryService } from './ai-summary.service';
 import { AiSummaryProcessor } from './ai-summary.processor';
+import { WorkshopsRepository } from './workshops.repository';
+import { QrService } from './qr.service';
+import { WorkshopsGateway } from './workshops.gateway';
+import { WorkshopsAdminController } from './workshops-admin.controller';
+import { RegistrationsController } from './registrations.controller';
 
 @Module({
   imports: [
@@ -15,8 +20,27 @@ import { AiSummaryProcessor } from './ai-summary.processor';
       },
     }),
   ],
-  controllers: [WorkshopsController],
-  providers: [WorkshopsService, AiSummaryService, AiSummaryProcessor],
-  exports: [WorkshopsService, AiSummaryService],
+  controllers: [
+    WorkshopsController,
+    WorkshopsAdminController,
+    RegistrationsController,
+  ],
+
+
+  providers: [
+    WorkshopsService,
+    AiSummaryService,
+    AiSummaryProcessor,
+    WorkshopsRepository,
+    QrService,
+    WorkshopsGateway,
+  ],
+  exports: [
+    WorkshopsService,
+    AiSummaryService,
+    WorkshopsRepository,
+    QrService,
+    WorkshopsGateway,
+  ],
 })
 export class WorkshopsModule {}

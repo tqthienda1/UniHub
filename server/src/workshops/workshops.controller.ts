@@ -1,28 +1,43 @@
-import { Controller, Get, Post, Param, UploadedFile, UseInterceptors, UseGuards } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  NotFoundException,
+} from '@nestjs/common';
 import { WorkshopsService } from './workshops.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { Role } from '@prisma/client';
 
 @Controller('workshops')
 export class WorkshopsController {
   constructor(private readonly workshopsService: WorkshopsService) {}
 
-  @Get(':id')
-  async getWorkshop(@Param('id') id: string) {
-    return this.workshopsService.getWorkshop(id);
+  @Get()
+  async getWorkshops(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('keyword') keyword?: string,
+    @Query('category') category?: string,
+    @Query('availableOnly') availableOnly?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.workshopsService.findAll({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      keyword,
+      category,
+      availableOnly: availableOnly === 'true',
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+    });
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.INSTRUCTOR, Role.ADMIN)
-  @Post(':id/pdf')
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadPdf(
-    @Param('id') id: string,
-    @UploadedFile() file: Express.Multer.File,
-  ) {
-    return this.workshopsService.queueAiSummary(id, file.buffer);
+  @Get(':id')
+  async getWorkshop(@Param('id') id: string) {
+    const workshop = await this.workshopsService.getWorkshop(id);
+    if (!workshop) {
+      throw new NotFoundException(`Workshop with ID ${id} not found`);
+    }
+    return workshop;
   }
 }
