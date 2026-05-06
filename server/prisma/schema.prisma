@@ -9,17 +9,25 @@ datasource db {
   provider = "postgresql"
 }
 
-model Student {
+enum Role {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+model User {
   id        String   @id @default(uuid())
-  mssv      String   @unique
+  email     String   @unique
+  password  String
   fullName  String   @map("full_name")
-  email     String
-  role      String   @default("student")
-  updatedAt DateTime @default(now()) @map("updated_at")
+  mssv      String?  @unique
+  role      Role     @default(STUDENT)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   registrations Registration[]
 
-  @@map("students")
+  @@map("users")
 }
 
 model Workshop {
@@ -42,17 +50,17 @@ model Workshop {
 
 model Registration {
   id         String   @id @default(uuid())
-  studentId  String   @map("student_id")
+  userId     String   @map("user_id")
   workshopId String   @map("workshop_id")
   status     String
   qrHash     String   @unique @map("qr_hash")
   createdAt  DateTime @default(now()) @map("created_at")
 
-  student  Student  @relation(fields: [studentId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
   workshop Workshop @relation(fields: [workshopId], references: [id])
   payments Payment[]
 
-  @@unique([studentId, workshopId])
+  @@unique([userId, workshopId])
   @@map("registrations")
 }
 
