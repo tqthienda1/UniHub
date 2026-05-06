@@ -14,16 +14,18 @@ export class AiSummaryProcessor {
   ) {}
 
   @Process('generate-summary')
-  async handleGenerateSummary(job: Job<{ workshopId: string; pdfBuffer: Buffer }>) {
+  async handleGenerateSummary(
+    job: Job<{ workshopId: string; pdfBuffer: Buffer }>,
+  ) {
     const { workshopId, pdfBuffer } = job.data;
     this.logger.log(`Processing AI summary for workshop: ${workshopId}`);
 
     try {
       // 1. Extract text from PDF
-      // pdfBuffer might be a plain object after serialization in Bull/Redis, 
+      // pdfBuffer might be a plain object after serialization in Bull/Redis,
       // or an actual Buffer if Bull handles it directly.
-      const buffer = Buffer.isBuffer(pdfBuffer) 
-        ? pdfBuffer 
+      const buffer = Buffer.isBuffer(pdfBuffer)
+        ? pdfBuffer
         : Buffer.from((pdfBuffer as any).data || pdfBuffer);
       const text = await this.aiSummaryService.extractTextFromPdf(buffer);
 
@@ -36,9 +38,14 @@ export class AiSummaryProcessor {
         data: { aiSummary: summary },
       });
 
-      this.logger.log(`Successfully generated summary for workshop: ${workshopId}`);
+      this.logger.log(
+        `Successfully generated summary for workshop: ${workshopId}`,
+      );
     } catch (error) {
-      this.logger.error(`Failed to process AI summary for workshop: ${workshopId}`, error);
+      this.logger.error(
+        `Failed to process AI summary for workshop: ${workshopId}`,
+        error,
+      );
       throw error; // Let Bull handle retries
     }
   }
