@@ -1,30 +1,34 @@
 ## Context
 
-<!-- Background and current state -->
-The UniHub Workshop system manages workshop registrations. Currently, workshop information is limited to basic metadata. To provide more value to students, we want to automatically generate summaries from workshop introduction PDFs. The system architecture already includes RabbitMQ for asynchronous tasks and a placeholder for an AI Processor Worker.
+Currently, workshop descriptions are entered manually. This change automates the creation of summaries from uploaded PDF documents using AI. The system already uses NestJS, Redis (for Bull Queue), and PostgreSQL.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Implement an automated pipeline: PDF Upload -> Text Extraction -> LLM Summarization -> DB Update.
-- Ensure the summarization process does not block the user interface (asynchronous).
-- Maintain a clear separation of concerns by using a dedicated worker for AI tasks.
+- Implement a background worker to process PDF files.
+- Extract text from PDFs using `pdf-parse`.
+- Generate summaries using OpenAI's GPT models.
+- Store summaries in the `workshops` table.
+- Provide a UI for organizers to upload PDFs and view summaries.
 
 **Non-Goals:**
-- Building a custom LLM model (will use external API).
-- Supporting multi-file uploads per workshop (one PDF per workshop).
-- Real-time UI updates (e.g., WebSockets) for summary completion.
+- Real-time processing of PDFs (will be asynchronous).
+- Support for formats other than PDF (e.g., DOCX).
+- UI for editing generated summaries (summaries are read-only for now).
 
 ## Decisions
 
-- **RabbitMQ for Decoupling**: The Backend API will only handle the file upload and publish a message to the `ai.pdf.process` queue. This ensures the API remains responsive.
-- **Python-based Worker**: We will use Python for the AI Processor Worker to leverage `pdfplumber` for robust text extraction and standard AI libraries.
-- **OpenAI Integration**: Use OpenAI's Chat Completion API (e.g., `gpt-4o-mini`) for generating concise, high-quality summaries.
-- **Database Schema**: Add a nullable `ai_summary` column to the `workshops` table. The `available_slots` and other fields remain unchanged.
-- **Storage**: Store the uploaded PDFs in a local directory (e.g., `storage/workshops/{id}/intro.pdf`) accessible by both the API and the Worker (shared volume).
+- **Queue System**: Use `@nestjs/bull` with a new queue named `ai-summary-queue`. This leverages the existing Redis infrastructure.
+- **Text Extraction**: Use `pdf-parse` for its simplicity and robustness in extracting text from PDFs in a Node.js environment.
+- **AI Integration**: Use the Google Gemini (Gemini 1.5 Flash/Pro) for summarization.
+- **Data Model**: Add a `ai_summary` column of type `TEXT` to the `workshops` table.
+- **Frontend**: Use a simple file upload component in the workshop edit page in the Admin app and style it with TailwindCSS.
 
 ## Risks / Trade-offs
 
-- **Cost and Quotas**: External AI API usage involves costs and rate limits. We should implement retries with exponential backoff.
-- **Processing Time**: PDF extraction and AI generation can take 5-15 seconds. Students might see a "Processing..." state or empty summary initially.
-- **Accuracy**: LLMs can occasionally miss details or misinterpret complex PDF layouts. We will use a clear prompt to minimize this.
+- **Risk**: Large PDFs might consume significant memory or exceed LLM token limits.
+  - **Mitigation**: Implement file size limits and truncate extracted text if it exceeds a reasonable token limit.
+- **Risk**: OpenAI API latency or cost.
+  - **Mitigation**: Process in the background (Bull Queue) and monitor usage.
+- **Trade-off**: Asynchronous processing means the summary isn't immediately available after upload.
+  - **Decision**: Show a "Processing..." status in the UI until the background job completes.

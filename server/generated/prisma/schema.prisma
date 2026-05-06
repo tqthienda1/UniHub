@@ -1,0 +1,83 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Student {
+  id        String   @id @default(uuid())
+  mssv      String   @unique
+  fullName  String   @map("full_name")
+  email     String
+  role      String   @default("student")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  registrations Registration[]
+
+  @@map("students")
+}
+
+model Workshop {
+  id             String   @id @default(uuid())
+  title          String
+  speakerInfo    String?  @map("speaker_info")
+  room           String
+  startTime      DateTime @map("start_time")
+  capacity       Int
+  availableSlots Int      @map("available_slots")
+  price          Decimal  @default(0)
+  aiSummary      String?  @map("ai_summary")
+  status         String   @default("active")
+
+  registrations Registration[]
+  checkins      CheckIn[]
+
+  @@map("workshops")
+}
+
+model Registration {
+  id         String   @id @default(uuid())
+  studentId  String   @map("student_id")
+  workshopId String   @map("workshop_id")
+  status     String
+  qrHash     String   @unique @map("qr_hash")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  student  Student   @relation(fields: [studentId], references: [id])
+  workshop Workshop  @relation(fields: [workshopId], references: [id])
+  payments Payment[]
+
+  @@unique([studentId, workshopId])
+  @@map("registrations")
+}
+
+model Payment {
+  id             String   @id @default(uuid())
+  registrationId String   @map("registration_id")
+  amount         Decimal
+  status         String
+  transactionId  String?  @map("transaction_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  registration Registration @relation(fields: [registrationId], references: [id])
+
+  @@map("payments")
+}
+
+model CheckIn {
+  id         String   @id @default(uuid())
+  qrHash     String   @map("qr_hash")
+  workshopId String   @map("workshop_id")
+  scannedAt  DateTime @map("scanned_at")
+  status     String
+
+  workshop Workshop @relation(fields: [workshopId], references: [id])
+
+  @@map("checkins")
+}
