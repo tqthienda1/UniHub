@@ -1,9 +1,40 @@
-import { useState, type ChangeEvent } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 const EditWorkshop = ({ workshopId }: { workshopId: string }) => {
+  useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
+  const [workshop, setWorkshop] = useState<any>(null);
+
+  const fetchWorkshop = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3000/admin/workshops`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const ws = data.items.find((w: any) => w.id === workshopId);
+        setWorkshop(ws);
+      }
+    } catch (error) {
+      console.error('Failed to fetch workshop', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkshop();
+    
+    const interval = setInterval(() => {
+      if (workshop && !workshop.aiSummary && workshop.status !== 'CANCELLED') {
+        fetchWorkshop();
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [workshopId, workshop?.aiSummary]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -21,8 +52,12 @@ const EditWorkshop = ({ workshopId }: { workshopId: string }) => {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`http://localhost:3000/workshops/${workshopId}/pdf`, {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3000/admin/workshops/${workshopId}/pdf`, {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         body: formData,
       });
 
@@ -106,6 +141,19 @@ const EditWorkshop = ({ workshopId }: { workshopId: string }) => {
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
             {message}
+          </div>
+        )}
+
+        {workshop?.aiSummary && (
+          <div className="mt-12 p-8 rounded-[2rem] bg-indigo-50/50 border border-indigo-100 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-400/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+            <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-6 flex items-center">
+              <span className="w-8 h-[2px] bg-indigo-200 mr-3"></span>
+              Generated AI Summary
+            </h3>
+            <p className="text-gray-700 text-lg font-medium leading-relaxed italic">
+              "{workshop.aiSummary}"
+            </p>
           </div>
         )}
       </div>

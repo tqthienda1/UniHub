@@ -6,7 +6,7 @@ UniHub currently operates without an authentication layer. All users have equal 
 
 **Goals:**
 - Implement JWT-based authentication for both Web and Mobile clients.
-- Provide a clear separation of roles: Admin, Instructor, Student.
+- Provide a clear separation of roles: Admin, Check-in Staff, Student.
 - Secure sensitive API endpoints (Workshops, AI Summaries).
 - Ensure secure password storage using strong hashing algorithms.
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useNotification } from '../context/NotificationContext';
 
 
@@ -118,9 +119,11 @@ const StudentWorkshopsPage = () => {
                   </span>
                 </div>
                 
-                <h3 className="text-xl font-black text-gray-900 mb-4 group-hover:text-indigo-600 transition-colors">
-                  {workshop.title}
-                </h3>
+                <Link to={`/workshops/${workshop.id}`} className="block group">
+                  <h3 className="text-xl font-black text-gray-900 mb-4 group-hover:text-indigo-600 transition-colors">
+                    {workshop.title}
+                  </h3>
+                </Link>
                 
                 <div className="space-y-3 mb-8">
                   <div className="flex items-center text-sm text-gray-500 font-semibold">

@@ -73,10 +73,17 @@
     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
 
 - [x] Fix this error occurs when click upload & summarize (Fixed by updating model to `gemini-1.5-flash-latest`)
-
-## 6. Testing and Validation
-
-- [ ] 6.1 Verify that uploading a PDF correctly triggers the background job.
-- [ ] 6.2 Verify that text is extracted correctly from various PDF samples.
-- [ ] 6.3 Verify that the summary is generated and stored in the database.
-- [ ] 6.4 Verify that the summary is displayed correctly in both Admin and Student apps.
+- [x] Authorize Admin to upload pdf for each workshop when click edit
+- [x] Show the summarize, in the edit tab
+- [x] Show the summarize in the details workshop when student click in it
+- [x] Failed to extract text from PDF (Fixed by using `new PDFParse({ data: buffer }).getText()`)
+[Nest] 17220  - 05/08/2026, 3:01:21 PM   ERROR [AiSummaryService] TypeError: pdf is not a function
+    at AiSummaryService.extractTextFromPdf (E:\TKPM\UniHub\server\src\workshops\ai-summary.service.ts:17:27)
+    at AiSummaryProcessor.handleGenerateSummary (E:\TKPM\UniHub\server\src\workshops\ai-summary.processor.ts:30:48)
+    at handlers.<computed> (E:\TKPM\UniHub\server\node_modules\bull\lib\queue.js:733:42)
+    at Queue.processJob (E:\TKPM\UniHub\server\node_modules\bull\lib\queue.js:1210:22)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+✓ Fixed: Updated code to use the `PDFParse` class as the `pdf-parse` library exports an object containing the class, not a direct function. Also reverted model to `gemini-1.5-flash-latest`.
+- [x] "I cannot summarize "[object Object]" as it is not actual content. Please provide the text of the workshop introduction document." summary always return this message, fix it (Fixed by ensuring `extractTextFromPdf` returns a string, even if the parser returns an object)
+- [x] When upload success and job is in queue, display an "In Queue" status and when the job is completed, update the status to "Done" and display the summary in the edit tab
+- [x] In My Registrations of student tab, make a button "View Introduce", when student click in it, it will show the summary of the workshop that has been AI generated (Only show when the status is "Done")

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import WorkshopFormModal from '../components/WorkshopFormModal';
 
 
@@ -15,10 +16,14 @@ interface Workshop {
   price: number;
   status: 'DRAFT' | 'PUBLISHED' | 'CANCELLED';
   category: string;
+  aiSummary?: string | null;
 }
 
 const AdminWorkshopsPage = () => {
+  const { user } = useAuth();
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
+  
+  const isStaff = user?.role === 'CHECKIN_STAFF';
 
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -88,17 +93,19 @@ const AdminWorkshopsPage = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Workshop Management</h1>
-          <p className="text-gray-500 mt-1">Create and manage your workshop sessions.</p>
+          <p className="text-gray-500 mt-1">{isStaff ? 'Check in students for upcoming workshops.' : 'Create and manage your workshop sessions.'}</p>
         </div>
-        <button
-          onClick={() => {
-            setEditingWorkshop(null);
-            setIsModalOpen(true);
-          }}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-100 transition-all active:scale-95"
-        >
-          Create Workshop
-        </button>
+        {!isStaff && (
+          <button
+            onClick={() => {
+              setEditingWorkshop(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-100 transition-all active:scale-95"
+          >
+            Create Workshop
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
@@ -153,13 +160,12 @@ const AdminWorkshopsPage = () => {
                   </td>
                   <td className="px-6 py-5 text-right space-x-2">
                     <Link
-                      to={`/admin/workshops/${workshop.id}`}
-                      className="text-xs font-black text-gray-400 hover:text-indigo-600 uppercase tracking-widest transition-colors mr-2"
+                      to={isStaff ? `/checkin/${workshop.id}` : `/admin/workshops/${workshop.id}`}
+                      className="text-xs font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest transition-colors mr-2"
                     >
-                      View
+                      {isStaff ? 'Check-in' : 'View'}
                     </Link>
-                    {workshop.status === 'DRAFT' && (
-
+                    {!isStaff && workshop.status === 'DRAFT' && (
                       <button
                         onClick={() => handlePublish(workshop.id)}
                         className="text-xs font-black text-emerald-600 hover:text-emerald-700 uppercase tracking-widest"
@@ -167,16 +173,18 @@ const AdminWorkshopsPage = () => {
                         Publish
                       </button>
                     )}
-                    <button
-                      onClick={() => {
-                        setEditingWorkshop(workshop);
-                        setIsModalOpen(true);
-                      }}
-                      className="text-xs font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest"
-                    >
-                      Edit
-                    </button>
-                    {workshop.status !== 'CANCELLED' && (
+                    {!isStaff && (
+                      <button
+                        onClick={() => {
+                          setEditingWorkshop(workshop);
+                          setIsModalOpen(true);
+                        }}
+                        className="text-xs font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {!isStaff && workshop.status !== 'CANCELLED' && (
                       <button
                         onClick={() => handleCancel(workshop.id)}
                         className="text-xs font-black text-rose-600 hover:text-rose-700 uppercase tracking-widest"

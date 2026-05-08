@@ -22,11 +22,11 @@ import { Role, RegistrationStatus } from '@prisma/client';
 
 @Controller('admin/workshops')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.INSTRUCTOR)
 export class WorkshopsAdminController {
   constructor(private readonly workshopsService: WorkshopsService) {}
 
   @Get()
+  @Roles(Role.ADMIN, Role.CHECKIN_STAFF)
   async getWorkshops(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -40,27 +40,31 @@ export class WorkshopsAdminController {
   }
 
   @Post()
-
+  @Roles(Role.ADMIN)
   async createWorkshop(@Body() data: any) {
     return this.workshopsService.createWorkshop(data);
   }
 
   @Patch(':id')
+  @Roles(Role.ADMIN)
   async updateWorkshop(@Param('id') id: string, @Body() data: any) {
     return this.workshopsService.updateWorkshop(id, data);
   }
 
   @Patch(':id/publish')
+  @Roles(Role.ADMIN)
   async publishWorkshop(@Param('id') id: string) {
     return this.workshopsService.publishWorkshop(id);
   }
 
   @Delete(':id')
+  @Roles(Role.ADMIN)
   async cancelWorkshop(@Param('id') id: string) {
     return this.workshopsService.cancelWorkshop(id);
   }
 
   @Get(':id/registrations')
+  @Roles(Role.ADMIN)
   async getRegistrations(
     @Param('id') id: string,
     @Query('page') page?: string,
@@ -76,6 +80,7 @@ export class WorkshopsAdminController {
   }
 
   @Get(':id/registrations/export')
+  @Roles(Role.ADMIN)
   @Header('Content-Type', 'text/csv')
   @Header('Content-Disposition', 'attachment; filename=registrations.csv')
   async exportRegistrations(@Param('id') id: string) {
@@ -94,11 +99,13 @@ export class WorkshopsAdminController {
   }
 
   @Post(':id/checkin')
+  @Roles(Role.ADMIN, Role.CHECKIN_STAFF)
   async checkIn(@Param('id') id: string, @Body('qrToken') qrToken: string) {
     return this.workshopsService.checkIn(id, qrToken);
   }
 
   @Post(':id/pdf')
+  @Roles(Role.ADMIN)
   @UseInterceptors(FileInterceptor('file'))
   async uploadPdf(
     @Param('id') id: string,

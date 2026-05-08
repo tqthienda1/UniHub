@@ -15,10 +15,11 @@ import AdminWorkshopDetail from './pages/AdminWorkshopDetail';
 import MyRegistrationsPage from './pages/MyRegistrationsPage';
 import EditWorkshop from './workshops/EditWorkshop';
 import WorkshopDetails from './workshops/WorkshopDetails';
+import CheckInPage from './pages/CheckInPage';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'INSTRUCTOR';
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'CHECKIN_STAFF';
 
   return isAdmin ? <AdminWorkshopsPage /> : <StudentWorkshopsPage />;
 };
@@ -50,8 +51,9 @@ function App() {
                 <Route index element={<Dashboard />} />
                 <Route path="ai-summary" element={<AiSummaryPage />} />
                 <Route path="admin/workshops/:id" element={<AdminWorkshopDetail />} />
+                <Route path="checkin/:id" element={<CheckInPage />} />
                 <Route path="my-registrations" element={<MyRegistrationsPage />} />
-                <Route path="workshops/:id" element={<WorkshopDetails workshopId="123e4567-e89b-12d3-a456-426614174000" />} />
+                <Route path="workshops/:id" element={<WorkshopDetails />} />
               </Route>
             </Route>
 
