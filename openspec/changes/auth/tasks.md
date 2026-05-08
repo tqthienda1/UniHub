@@ -35,3 +35,5 @@ EX: when user login -> redirect to home page, when user logout -> redirect to lo
 - [x] Check-in staff only action is scan the qr of student for check in the workshop
 - [x] Run and build client and server, fix the errors if any occur
 - [x] Sync the local schema to supabase database    
+- [x] make the MSSV is not unique in the database
+- [x] sync the local schema to supabase database

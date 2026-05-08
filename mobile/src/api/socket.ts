@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import Constants from 'expo-constants';
 
-const SOCKET_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:3000';
+const SOCKET_URL = Constants.expoConfig?.extra?.apiUrl || 'http://10.0.2.2:3000';
 
 let socket: Socket | null = null;
 

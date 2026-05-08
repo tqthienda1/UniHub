@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, ConflictException, BadRequestException, NotFoundException, HttpException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 import { PrismaService } from '../prisma/prisma.service';
@@ -350,41 +350,175 @@ export class WorkshopsService implements OnModuleInit {
   }
 
   async checkIn(workshopId: string, qrToken: string) {
-    const payload = this.qrService.verify(qrToken) as QrPayload | null;
-    if (!payload || payload.workshopId !== workshopId) {
-      throw new Error('Invalid or expired QR code');
-    }
+    try {
+      const payload = this.qrService.verify(qrToken) as QrPayload | null;
+      if (!payload || payload.workshopId !== workshopId) {
+        throw new BadRequestException('Invalid or expired QR code');
+      }
 
-    const registrationId = payload.registrationId;
-    const registration = await this.prisma.workshopRegistration.findUnique({
-      where: { id: registrationId },
+      const registrationId = payload.registrationId;
+      const registration = await this.prisma.workshopRegistration.findUnique({
+        where: { id: registrationId },
+      });
+
+      if (!registration) {
+        throw new NotFoundException('Registration not found');
+      }
+
+      if (registration.status === RegistrationStatus.CHECKED_IN) {
+        throw new ConflictException('Student already checked in');
+      }
+
+      if (registration.status !== RegistrationStatus.CONFIRMED) {
+        throw new BadRequestException('Registration is not in confirmed state');
+      }
+
+      const checkin = await this.prisma.$transaction(async (tx) => {
+        await tx.workshopRegistration.update({
+          where: { id: registrationId },
+          data: { status: RegistrationStatus.CHECKED_IN },
+        });
+
+        return tx.workshopCheckIn.create({
+          data: {
+            registrationId,
+            workshopId,
+            scannedAt: new Date(),
+          },
+          include: {
+            registration: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    email: true,
+                    mssv: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+      });
+      await this.notifyCheckInUpdate(workshopId);
+
+      return {
+        message: 'Check-in successful',
+        student: {
+          id: checkin.registration.user.id,
+          fullName: checkin.registration.user.fullName,
+          email: checkin.registration.user.email,
+        },
+        scannedAt: checkin.scannedAt,
+      };
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      throw new BadRequestException('Invalid or expired QR code');
+    }
+  }
+
+  private async notifyCheckInUpdate(workshopId: string) {
+    const [registeredCount, checkedInCount] = await Promise.all([
+      this.prisma.workshopRegistration.count({
+        where: {
+          workshopId,
+          status: {
+            in: [RegistrationStatus.CONFIRMED, RegistrationStatus.CHECKED_IN],
+          },
+        },
+      }),
+      this.prisma.workshopCheckIn.count({
+        where: { workshopId },
+      }),
+    ]);
+
+    this.gateway.emitCheckInUpdate(workshopId, {
+      registeredCount,
+      checkedInCount,
+    });
+  }
+
+  async getActiveWorkshopsForStaff() {
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - 2); // include workshops from 2 days ago
+    windowStart.setHours(0, 0, 0, 0);
+
+    const windowEnd = new Date();
+    windowEnd.setDate(windowEnd.getDate() + 7); // include upcoming workshops up to 7 days ahead
+    windowEnd.setHours(23, 59, 59, 999);
+
+    const workshops = await this.prisma.workshop.findMany({
+      where: {
+        status: WorkshopStatus.PUBLISHED,
+        startTime: {
+          gte: windowStart,
+          lte: windowEnd,
+        },
+      },
+      include: {
+        _count: {
+          select: {
+            registrations: {
+              where: {
+                status: {
+                  in: [
+                    RegistrationStatus.CONFIRMED,
+                    RegistrationStatus.CHECKED_IN,
+                  ],
+                },
+              },
+            },
+            checkins: true,
+          },
+        },
+      },
+      orderBy: { startTime: 'asc' },
     });
 
-    if (!registration) {
-      throw new Error('Registration not found');
+    return workshops.map((w) => ({
+      id: w.id,
+      title: w.title,
+      startTime: w.startTime,
+      room: w.room,
+      location: w.location,
+      capacity: w.capacity,
+      registeredCount: w._count.registrations,
+      checkedInCount: w._count.checkins,
+    }));
+  }
+
+  async searchRegistrations(workshopId: string, keyword?: string) {
+    const where: Prisma.WorkshopRegistrationWhereInput = {
+      workshopId,
+      status: {
+        in: [RegistrationStatus.CONFIRMED, RegistrationStatus.CHECKED_IN],
+      },
+    };
+
+    if (keyword) {
+      where.user = {
+        OR: [
+          { fullName: { contains: keyword, mode: 'insensitive' } },
+          { email: { contains: keyword, mode: 'insensitive' } },
+          { mssv: { contains: keyword, mode: 'insensitive' } },
+        ],
+      };
     }
 
-    if (registration.status === RegistrationStatus.CHECKED_IN) {
-      throw new Error('Student already checked in');
-    }
-
-    if (registration.status !== RegistrationStatus.CONFIRMED) {
-      throw new Error('Registration is not in confirmed state');
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      await tx.workshopRegistration.update({
-        where: { id: registrationId },
-        data: { status: RegistrationStatus.CHECKED_IN },
-      });
-
-      return tx.workshopCheckIn.create({
-        data: {
-          registrationId,
-          workshopId,
-          scannedAt: new Date(),
+    return this.prisma.workshopRegistration.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            mssv: true,
+          },
         },
-      });
+      },
+      orderBy: { user: { fullName: 'asc' } },
     });
   }
 
@@ -527,13 +661,50 @@ export class WorkshopsService implements OnModuleInit {
     ]);
 
     return {
-
       total,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
       items,
     };
+  }
+
+  async updateRegistrationStatus(id: string, status: RegistrationStatus) {
+    const registration = await this.prisma.workshopRegistration.findUnique({
+      where: { id },
+    });
+
+    if (!registration) {
+      throw new Error('Registration not found');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const reg = await tx.workshopRegistration.update({
+        where: { id },
+        data: { status },
+      });
+
+      if (status === RegistrationStatus.CHECKED_IN) {
+        await tx.workshopCheckIn.upsert({
+          where: { registrationId: id },
+          update: { scannedAt: new Date() },
+          create: {
+            registrationId: id,
+            workshopId: reg.workshopId,
+            scannedAt: new Date(),
+          },
+        });
+      }
+
+      return reg;
+    });
+
+    // Notify via WebSockets
+    const newSeats = await this.getAvailableSeats(registration.workshopId);
+    this.gateway.emitSeatCountUpdate(registration.workshopId, newSeats);
+    await this.notifyCheckInUpdate(registration.workshopId);
+
+    return updated;
   }
 
   async findAllAdmin(params: {

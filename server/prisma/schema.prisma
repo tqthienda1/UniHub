@@ -34,7 +34,7 @@ model User {
   email     String   @unique
   password  String
   fullName  String   @map("full_name")
-  mssv      String?  @unique
+  mssv      String?  @map("mssv")
   role      Role     @default(STUDENT)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
