@@ -13,9 +13,9 @@ export class AiSummaryService {
 
   async extractTextFromPdf(buffer: Buffer): Promise<string> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      const data = await (pdf as any)(buffer);
-      return data.text;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+      const data = await new (pdf as any).PDFParse({ data: buffer }).getText();
+      return typeof data === 'string' ? data : (data.text || JSON.stringify(data));
     } catch (error) {
       this.logger.error('Failed to extract text from PDF', error);
       throw new Error('PDF text extraction failed');

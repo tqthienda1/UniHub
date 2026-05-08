@@ -11,7 +11,7 @@ datasource db {
 
 enum Role {
   STUDENT
-  INSTRUCTOR
+  CHECKIN_STAFF
   ADMIN
 }
 

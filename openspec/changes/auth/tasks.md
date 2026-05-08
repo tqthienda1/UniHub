@@ -30,3 +30,8 @@
 - [x] Make router protected
 EX: when user login -> redirect to home page, when user logout -> redirect to login page
 - [x] Make a button from login page to register page
+
+- [x] Implement the auth based on new design and rbac spec, the instructor change to check-in staff
+- [x] Check-in staff only action is scan the qr of student for check in the workshop
+- [x] Run and build client and server, fix the errors if any occur
+- [x] Sync the local schema to supabase database    

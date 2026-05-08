@@ -314,6 +314,7 @@ export class WorkshopsService implements OnModuleInit {
             startTime: true,
             room: true,
             category: true,
+            aiSummary: true,
           },
         },
       },

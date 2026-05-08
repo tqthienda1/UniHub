@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 
 interface Workshop {
   id: string;
@@ -7,7 +8,8 @@ interface Workshop {
   status: string;
 }
 
-const WorkshopDetails = ({ workshopId }: { workshopId: string }) => {
+const WorkshopDetails = () => {
+  const { id: workshopId } = useParams<{ id: string }>();
   const [workshop, setWorkshop] = useState<Workshop | null>(null);
   const [loading, setLoading] = useState(true);
 

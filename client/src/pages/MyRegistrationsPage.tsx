@@ -14,6 +14,7 @@ interface Registration {
     title: string;
     room: string;
     startTime: string;
+    aiSummary?: string | null;
   };
 }
 
@@ -22,6 +23,7 @@ const MyRegistrationsPage = () => {
   const [loading, setLoading] = useState(true);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [selectedReg, setSelectedReg] = useState<Registration | null>(null);
   const { showNotification } = useNotification();
 
@@ -57,6 +59,11 @@ const MyRegistrationsPage = () => {
   const showQr = (reg: Registration) => {
     setSelectedReg(reg);
     setIsQrModalOpen(true);
+  };
+
+  const showSummary = (reg: Registration) => {
+    setSelectedReg(reg);
+    setIsSummaryModalOpen(true);
   };
 
   const handleCancel = async () => {
@@ -131,6 +138,7 @@ const MyRegistrationsPage = () => {
                   <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Workshop</th>
                   <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Schedule</th>
                   <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Status</th>
+                  <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">Summary</th>
                   <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 text-right">Pass</th>
                 </tr>
               </thead>
@@ -163,6 +171,18 @@ const MyRegistrationsPage = () => {
                         <span className={`w-1.5 h-1.5 rounded-full mr-2 ${reg.status === 'CONFIRMED' ? 'bg-emerald-500' : reg.status === 'CHECKED_IN' ? 'bg-indigo-500' : 'bg-gray-400'}`}></span>
                         {reg.status}
                       </span>
+                    </td>
+                    <td className="px-10 py-8">
+                      {reg.workshop.aiSummary ? (
+                        <button
+                          onClick={() => showSummary(reg)}
+                          className="px-4 py-2 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-100 transition-all active:scale-95 border border-indigo-100"
+                        >
+                          View Introduce
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">N/A</span>
+                      )}
                     </td>
                     <td className="px-10 py-8 text-right">
                       <div className="flex items-center justify-end space-x-4">
@@ -216,6 +236,48 @@ const MyRegistrationsPage = () => {
         token={selectedReg?.qrToken || null}
         workshopTitle={selectedReg?.workshop.title || ''}
       />
+
+      {/* Summary Modal */}
+      {isSummaryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in slide-in-from-bottom-8 duration-500">
+            <div className="p-10 space-y-8">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight leading-tight mb-2">Workshop Introduce</h3>
+                  <p className="text-indigo-600 font-bold text-sm uppercase tracking-widest">{selectedReg?.workshop.title}</p>
+                </div>
+                <button 
+                  onClick={() => setIsSummaryModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-2xl transition-colors"
+                >
+                  <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-8 rounded-[2rem] bg-indigo-50/50 border border-indigo-100 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-400/5 rounded-full -mr-12 -mt-12 blur-xl"></div>
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-4 flex items-center">
+                  <span className="w-6 h-[2px] bg-indigo-200 mr-2"></span>
+                  AI Generated Summary
+                </h4>
+                <p className="text-gray-700 text-base font-medium leading-relaxed italic">
+                  "{selectedReg?.workshop.aiSummary}"
+                </p>
+              </div>
+
+              <button
+                onClick={() => setIsSummaryModalOpen(false)}
+                className="w-full py-5 bg-gray-900 text-white font-black rounded-2xl shadow-xl shadow-gray-200 hover:bg-gray-800 transition-all active:scale-95 uppercase tracking-widest text-xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
