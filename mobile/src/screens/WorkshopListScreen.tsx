@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { Search, Filter } from 'lucide-react-native';
+import { Search, Filter, LayoutDashboard } from 'lucide-react-native';
 import apiClient from '../api/client';
 import WorkshopCard from '../components/WorkshopCard';
 
@@ -78,6 +78,12 @@ const WorkshopListScreen = ({ navigation }: any) => {
         </View>
         <TouchableOpacity style={styles.filterButton}>
           <Filter size={20} color="#3b82f6" />
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.filterButton, { backgroundColor: '#f0f9ff' }]} 
+          onPress={() => navigation.navigate('StaffWorkshopSelect')}
+        >
+          <LayoutDashboard size={20} color="#0284c7" />
         </TouchableOpacity>
       </View>
 
