@@ -109,12 +109,31 @@
 
 - [x] 12.4 Implement publish/cancel workshop actions with confirmation dialogs
 - [x] 12.5 Add role guard: hide admin pages from non-admin users
+- [x] Delete tab ai summaries in admin portal
+- [x] Fix when click create workshop, the page goes blank
+- [x] Add upload pdf to summarize by AI in edit and create workshop modal
+- [x] Animation when generating summary and show the result when done immediately
+- [x] Fix cannot create workshop, click create nothing happen
+- [x] Fix list of workshops doesnt show in Workshop Management
+- [x] fix [Nest] 12544  - 05/12/2026, 11:14:41 PM   ERROR [NestApplication] Error: listen EADDRINUSE: address already in use :::3000 +1ms
+node:net:1908
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
 
-
-## 13. End-to-End Verification
-
-- [ ] 13.1 Manual test: register 2 concurrent users for 1-seat workshop; verify exactly 1 succeeds
-- [ ] 13.2 Manual test: scan QR on mobile; verify registration transitions to CHECKED_IN
-- [ ] 13.3 Manual test: scan same QR twice; verify second scan returns 409
-- [ ] 13.4 Manual test: take scanner offline, scan QR, reconnect; verify sync and CHECKED_IN status
-- [ ] 13.5 Verify Redis seat counter stays consistent with DB after cron reclamation run
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at Server.listen (node:net:2067:7)
+    at ExpressAdapter.listen (E:\TKPM\UniHub\server\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at E:\TKPM\UniHub\server\node_modules\@nestjs\core\nest-application.js:188:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (E:\TKPM\UniHub\server\node_modules\@nestjs\core\nest-application.js:178:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async bootstrap (E:\TKPM\UniHub\server\src\main.ts:14:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+- [ ] Show list of workshops in Workshop Management page of admin

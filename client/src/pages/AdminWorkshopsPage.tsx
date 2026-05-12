@@ -33,7 +33,7 @@ const AdminWorkshopsPage = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3000/admin/workshops', {
+      const response = await fetch('http://localhost:3000/staff-portal/workshops', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -56,7 +56,7 @@ const AdminWorkshopsPage = () => {
   const handlePublish = async (id: string) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/admin/workshops/${id}/publish`, {
+      const response = await fetch(`http://localhost:3000/staff-portal/workshops/${id}/publish`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -74,7 +74,7 @@ const AdminWorkshopsPage = () => {
     if (!confirm('Are you sure you want to cancel this workshop?')) return;
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/admin/workshops/${id}`, {
+      const response = await fetch(`http://localhost:3000/staff-portal/workshops/${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
