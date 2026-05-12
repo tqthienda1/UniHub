@@ -49,11 +49,14 @@ model Workshop {
   title          String
   description    String?
   category       String?
+  speakerName    String?        @map("speaker_name")
+  speakerAvatar  String?        @map("speaker_avatar")
   speakerInfo    String?        @map("speaker_info")
   location       String?
   room           String
+  roomDiagramUrl String?        @map("room_diagram_url")
   startTime      DateTime       @map("start_time")
-  endTime        DateTime?      @map("end_time")
+  endTime        DateTime       @map("end_time")
   capacity       Int
   availableSeats Int            @default(0) @map("available_seats")
   price          Decimal        @default(0)
@@ -110,5 +113,15 @@ model WorkshopCheckIn {
   workshop     Workshop             @relation(fields: [workshopId], references: [id])
 
   @@map("workshop_checkins")
+}
+
+model StudentIdentity {
+  mssv      String   @id
+  email     String   @unique
+  fullName  String   @map("full_name")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("student_identities")
 }
 

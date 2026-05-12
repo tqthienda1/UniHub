@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { RedisModule } from './redis/redis.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { SyncModule } from './sync/sync.module';
 import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
@@ -24,6 +25,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     UsersModule,
     AuthModule,
     RedisModule,
+    SyncModule,
     NotificationsModule,
   ],
 

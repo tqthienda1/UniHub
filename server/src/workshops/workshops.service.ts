@@ -192,6 +192,25 @@ export class WorkshopsService implements OnModuleInit {
 
   async register(workshopId: string, userId: string) {
     this.logger.log(`Student ${userId} attempting to register for workshop ${workshopId}`);
+    
+    // 0. Verify student identity against authoritative Source of Truth
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.role === 'STUDENT') {
+      if (!user.mssv) {
+        throw new BadRequestException('Your account is missing MSSV. Please update your profile.');
+      }
+
+      const identity = await this.prisma.studentIdentity.findUnique({
+        where: { mssv: user.mssv }
+      });
+
+      if (!identity) {
+        throw new BadRequestException(`Your Student ID (${user.mssv}) is not recognized in the university's official records. Only verified students can register.`);
+      }
+    }
+
     const lockKey = `workshop:${workshopId}:lock`;
 
     const lockTtl = 5; // 5 seconds

@@ -16,6 +16,7 @@ import MyRegistrationsPage from './pages/MyRegistrationsPage';
 import EditWorkshop from './workshops/EditWorkshop';
 import WorkshopDetails from './workshops/WorkshopDetails';
 import CheckInPage from './pages/CheckInPage';
+import AdminStudentsPage from './pages/AdminStudentsPage';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -38,6 +39,7 @@ function App() {
               <Route element={<Layout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="admin/workshops/:id" element={<AdminWorkshopDetail />} />
+                <Route path="admin/students" element={<AdminStudentsPage />} />
                 <Route path="checkin/:id" element={<CheckInPage />} />
                 <Route path="my-registrations" element={<MyRegistrationsPage />} />
                 <Route path="workshops/:id" element={<WorkshopDetails />} />

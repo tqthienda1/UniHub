@@ -1,0 +1,7 @@
+mssv,email,fullName
+21110001,student1@example.com,Student One
+21110002,student2@example.com,Student Two
+21110003,invalid-email,Student Three
+,missing-mssv@example.com,Student Four
+21110005,student5@example.com,
+21110001,updated-student1@example.com,Student One Updated
