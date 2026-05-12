@@ -6,9 +6,14 @@ interface Workshop {
   description?: string;
   room: string;
   startTime: string;
+  endTime: string;
   capacity: number;
   price: number;
   category: string;
+  speakerName?: string;
+  speakerAvatar?: string;
+  speakerInfo?: string;
+  roomDiagramUrl?: string;
   aiSummary?: string | null;
 }
 
@@ -25,9 +30,14 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
     description: '',
     room: '',
     startTime: '',
+    endTime: '',
     capacity: 0,
     price: 0,
     category: '',
+    speakerName: '',
+    speakerAvatar: '',
+    speakerInfo: '',
+    roomDiagramUrl: '',
   });
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'summary'>('details');
@@ -46,9 +56,14 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
         description: workshop.description || '',
         room: workshop.room,
         startTime: new Date(workshop.startTime).toISOString().slice(0, 16),
+        endTime: new Date(workshop.endTime).toISOString().slice(0, 16),
         capacity: workshop.capacity,
         price: workshop.price,
         category: workshop.category,
+        speakerName: workshop.speakerName || '',
+        speakerAvatar: workshop.speakerAvatar || '',
+        speakerInfo: workshop.speakerInfo || '',
+        roomDiagramUrl: workshop.roomDiagramUrl || '',
       });
       setAiSummary(workshop.aiSummary || null);
     } else {
@@ -57,9 +72,14 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
         description: '',
         room: '',
         startTime: '',
+        endTime: '',
         capacity: 0,
         price: 0,
         category: '',
+        speakerName: '',
+        speakerAvatar: '',
+        speakerInfo: '',
+        roomDiagramUrl: '',
       });
       setAiSummary(null);
     }
@@ -151,6 +171,7 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
           capacity: Number(formData.capacity),
           price: Number(formData.price),
           startTime: new Date(formData.startTime).toISOString(),
+          endTime: new Date(formData.endTime).toISOString(),
         }),
       });
 
@@ -199,101 +220,162 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
 
           {activeTab === 'details' ? (
             <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Title</label>
-                <input
-                  required
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Title</label>
+                  <input
+                    required
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Category</label>
+                  <input
+                    required
+                    type="text"
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Category</label>
-                <input
-                  required
-                  type="text"
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                />
-              </div>
-            </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Description</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none h-24 resize-none"
-              />
-            </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none h-24 resize-none"
+                />
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Room</label>
-                <input
-                  required
-                  type="text"
-                  value={formData.room}
-                  onChange={(e) => setFormData({ ...formData, room: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Room</label>
+                  <input
+                    required
+                    type="text"
+                    value={formData.room}
+                    onChange={(e) => setFormData({ ...formData, room: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  {/* Empty space for grid alignment or add another field */}
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Start Time</label>
-                <input
-                  required
-                  type="datetime-local"
-                  value={formData.startTime}
-                  onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Capacity</label>
-                <input
-                  required
-                  type="number"
-                  value={formData.capacity}
-                  onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) })}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Start Time</label>
+                  <input
+                    required
+                    type="datetime-local"
+                    value={formData.startTime}
+                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">End Time</label>
+                  <input
+                    required
+                    type="datetime-local"
+                    value={formData.endTime}
+                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Price (đ)</label>
-                <input
-                  required
-                  type="number"
-                  value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: parseInt(e.target.value) })}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                />
-              </div>
-            </div>
 
-            <div className="flex gap-4 pt-6">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-2xl transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-2 px-12 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:grayscale"
-              >
-                {loading ? 'Saving...' : workshop ? 'Update Workshop' : 'Create Workshop'}
-              </button>
-            </div>
-          </form>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Capacity</label>
+                  <input
+                    required
+                    type="number"
+                    value={formData.capacity}
+                    onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Price (đ)</label>
+                  <input
+                    required
+                    type="number"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: parseInt(e.target.value) })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100 pt-4 mt-4">
+                <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4">Speaker Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Speaker Name</label>
+                    <input
+                      type="text"
+                      value={formData.speakerName}
+                      onChange={(e) => setFormData({ ...formData, speakerName: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Speaker Avatar URL</label>
+                    <input
+                      type="text"
+                      value={formData.speakerAvatar}
+                      onChange={(e) => setFormData({ ...formData, speakerAvatar: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1 mt-4">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Speaker Info/Bio</label>
+                  <textarea
+                    value={formData.speakerInfo}
+                    onChange={(e) => setFormData({ ...formData, speakerInfo: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none h-20 resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100 pt-4 mt-4">
+                <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4">Room Layout</h3>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Room Diagram URL</label>
+                  <input
+                    type="text"
+                    value={formData.roomDiagramUrl}
+                    onChange={(e) => setFormData({ ...formData, roomDiagramUrl: e.target.value })}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-6">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-2xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-2 px-12 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:grayscale"
+                >
+                  {loading ? 'Saving...' : (workshop ? 'Update Workshop' : 'Create Workshop')}
+                </button>
+              </div>
+            </form>
           ) : (
             <div className="space-y-6 py-4">
               <div className="space-y-4">
@@ -339,7 +421,7 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
               {aiSummary && (
                 <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100">
                   <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">AI Summary</h4>
-                  <p className="text-sm text-gray-700 font-medium leading-relaxed italic">"{aiSummary}"</p>
+                  <p className="text-sm text-gray-700 font-medium leading-relaxed italic">&ldquo;{aiSummary}&rdquo;</p>
                 </div>
               )}
             </div>

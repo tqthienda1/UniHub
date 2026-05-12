@@ -4,6 +4,18 @@ import { useParams } from 'react-router-dom';
 interface Workshop {
   id: string;
   title: string;
+  description: string | null;
+  category: string | null;
+  speakerName: string | null;
+  speakerAvatar: string | null;
+  speakerInfo: string | null;
+  room: string;
+  roomDiagramUrl: string | null;
+  startTime: string;
+  endTime: string;
+  capacity: number;
+  availableSeats: number;
+  price: number;
   aiSummary: string | null;
   status: string;
 }
@@ -30,7 +42,6 @@ const WorkshopDetails = () => {
 
     fetchWorkshop();
     
-    // Poll for summary every 5 seconds if it's missing
     const interval = setInterval(() => {
       if (workshop && !workshop.aiSummary) {
         fetchWorkshop();
@@ -41,10 +52,12 @@ const WorkshopDetails = () => {
   }, [workshopId, workshop?.aiSummary]);
 
   if (loading) return (
-    <div className="max-w-4xl mx-auto mt-10 p-8 bg-white rounded-3xl shadow-xl border border-gray-100 animate-pulse">
-      <div className="h-10 bg-gray-200 rounded-lg w-3/4 mb-4"></div>
-      <div className="h-6 bg-gray-100 rounded-lg w-1/4 mb-10"></div>
-      <div className="h-48 bg-indigo-50 rounded-2xl"></div>
+    <div className="max-w-5xl mx-auto mt-10 p-8 space-y-8 animate-pulse">
+      <div className="h-64 bg-gray-200 rounded-3xl"></div>
+      <div className="space-y-4">
+        <div className="h-10 bg-gray-200 rounded-lg w-3/4"></div>
+        <div className="h-6 bg-gray-100 rounded-lg w-1/4"></div>
+      </div>
     </div>
   );
 
@@ -56,58 +69,164 @@ const WorkshopDetails = () => {
     </div>
   );
 
+  const formatDateTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleString('vi-VN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
-    <div className="p-8 max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl border border-gray-50 mt-10 transition-all hover:shadow-indigo-100">
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight mb-3">{workshop.title}</h1>
-          <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest shadow-sm
-            ${workshop.status === 'active' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-100 text-rose-700 border border-rose-200'}`}>
-            <span className={`w-2 h-2 rounded-full mr-2 ${workshop.status === 'active' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></span>
-            {workshop.status}
-          </span>
+    <div className="max-w-5xl mx-auto mt-10 space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Header Section */}
+      <div className="bg-white rounded-[2.5rem] p-10 shadow-2xl shadow-indigo-100/50 border border-gray-50">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
+          <div className="space-y-4">
+            <div className="flex items-center space-x-3">
+              <span className="px-4 py-1.5 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em] rounded-full border border-indigo-100">
+                {workshop.category || 'Workshop'}
+              </span>
+              <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border
+                ${workshop.status === 'PUBLISHED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+                {workshop.status}
+              </span>
+            </div>
+            <h1 className="text-5xl font-black text-gray-900 tracking-tight leading-tight">
+              {workshop.title}
+            </h1>
+          </div>
+          <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 text-center min-w-[200px]">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Price</p>
+            <p className="text-3xl font-black text-indigo-600">
+              {workshop.price === 0 ? 'FREE' : `${Number(workshop.price).toLocaleString()}đ`}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="flex items-center space-x-4 p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
+            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm text-indigo-600">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">When</p>
+              <p className="text-sm font-bold text-gray-900">{formatDateTime(workshop.startTime)}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-4 p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
+            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm text-indigo-600">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Where</p>
+              <p className="text-sm font-bold text-gray-900">{workshop.room}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-4 p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
+            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm text-indigo-600">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Seats</p>
+              <p className="text-sm font-bold text-gray-900">
+                {workshop.availableSeats} / {workshop.capacity} available
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-8">
-        <section className="relative overflow-hidden p-8 rounded-2xl bg-gradient-to-br from-indigo-50 via-white to-blue-50 border border-indigo-100 shadow-inner">
-          <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-indigo-400/10 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-32 h-32 bg-blue-400/10 rounded-full blur-3xl"></div>
-          
-          <h2 className="flex items-center text-sm font-black text-indigo-900 mb-6 uppercase tracking-[0.2em]">
-            <span className="p-2 bg-indigo-600 rounded-lg mr-3 shadow-lg shadow-indigo-200">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Description & AI Summary */}
+        <div className="lg:col-span-2 space-y-8">
+          <section className="bg-white rounded-[2.5rem] p-10 shadow-xl border border-gray-50">
+            <h2 className="text-2xl font-black text-gray-900 mb-6">About this Workshop</h2>
+            <p className="text-gray-600 leading-relaxed text-lg">
+              {workshop.description || "No description available for this workshop."}
+            </p>
+          </section>
+
+          <section className="relative overflow-hidden p-10 rounded-[2.5rem] bg-indigo-600 text-white shadow-2xl shadow-indigo-200">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+            <h2 className="flex items-center text-[10px] font-black uppercase tracking-[0.3em] mb-8 text-indigo-100">
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-            </span>
-            AI Content Summary
-          </h2>
-          
-          {workshop.aiSummary ? (
-            <div className="relative">
-              <span className="absolute -top-4 -left-2 text-6xl text-indigo-200 font-serif opacity-50">“</span>
-              <p className="text-gray-700 leading-relaxed text-xl font-medium relative z-10 px-4">
-                {workshop.aiSummary}
+              AI Content Insight
+            </h2>
+            
+            {workshop.aiSummary ? (
+              <p className="text-2xl font-medium leading-tight italic">
+                "{workshop.aiSummary}"
               </p>
-              <div className="flex justify-end mt-4">
-                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Generated by UniHub AI</span>
+            ) : (
+              <div className="flex items-center space-x-4 py-4">
+                <div className="w-6 h-6 border-2 border-indigo-300 border-t-white rounded-full animate-spin"></div>
+                <p className="font-bold text-indigo-100">Generating AI summary...</p>
               </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="relative">
-                <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-ping"></div>
+            )}
+          </section>
+        </div>
+
+        {/* Right Column: Speaker & Room Diagram */}
+        <div className="space-y-8">
+          <section className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-gray-50">
+            <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">Speaker</h3>
+            <div className="flex items-center space-x-4 mb-6">
+              {workshop.speakerAvatar ? (
+                <img src={workshop.speakerAvatar} alt={workshop.speakerName || ''} className="w-16 h-16 rounded-2xl object-cover shadow-md" />
+              ) : (
+                <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 font-black text-2xl shadow-inner">
+                  {workshop.speakerName?.[0] || '?'}
                 </div>
+              )}
+              <div>
+                <p className="text-lg font-black text-gray-900">{workshop.speakerName || 'To be announced'}</p>
+                <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest">Keynote Speaker</p>
               </div>
-              <p className="text-indigo-900 font-black text-xl mt-6 tracking-tight">
-                Synthesizing document...
-              </p>
-              <p className="text-gray-500 text-sm mt-2 font-medium">This usually takes about 30 seconds to provide the best summary.</p>
             </div>
-          )}
-        </section>
+            <p className="text-sm text-gray-500 leading-relaxed font-medium">
+              {workshop.speakerInfo || "Information about the speaker will be updated soon."}
+            </p>
+          </section>
+
+          <section className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-gray-50 overflow-hidden">
+            <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">Room Layout</h3>
+            {workshop.roomDiagramUrl ? (
+              <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-inner group">
+                <img 
+                  src={workshop.roomDiagramUrl} 
+                  alt="Room Layout" 
+                  className="w-full h-auto transition-transform duration-700 group-hover:scale-110" 
+                />
+              </div>
+            ) : (
+              <div className="aspect-square bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-center p-6">
+                <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Layout map<br/>not uploaded</p>
+              </div>
+            )}
+          </section>
+
+          <button className="w-full bg-gray-900 hover:bg-black text-white py-6 rounded-3xl font-black text-xl shadow-2xl shadow-gray-200 transition-all active:scale-[0.98] uppercase tracking-widest">
+            Register Now
+          </button>
+        </div>
       </div>
     </div>
   );

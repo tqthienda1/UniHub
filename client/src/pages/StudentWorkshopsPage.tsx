@@ -12,6 +12,7 @@ interface Workshop {
   availableSeats: number;
   price: number;
   category: string;
+  speakerName?: string;
 }
 
 const StudentWorkshopsPage = () => {
@@ -138,6 +139,12 @@ const StudentWorkshopsPage = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     {new Date(workshop.startTime).toLocaleString()}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500 font-semibold">
+                    <svg className="w-4 h-4 mr-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    {workshop.speakerName || 'To be announced'}
                   </div>
                   <div className="flex items-center text-sm text-gray-500 font-semibold">
                     <svg className="w-4 h-4 mr-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
