@@ -39,6 +39,7 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
     speakerInfo: '',
     roomDiagramUrl: '',
   });
+  const [activeTab, setActiveTab] = useState<'details' | 'summary'>('details');
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -80,12 +81,16 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
       });
       setAiSummary(null);
     }
+    setActiveTab('details');
+    setFile(null);
+    setUploadMessage('');
+    setIsQueued(false);
   }, [workshop, isOpen]);
 
   // Polling for summary
   useEffect(() => {
     let interval: any;
-    if (isOpen && workshop && !aiSummary && isQueued) {
+    if (isOpen && activeTab === 'summary' && workshop && !aiSummary && isQueued) {
       interval = setInterval(async () => {
         try {
           const token = localStorage.getItem('token');
@@ -108,7 +113,7 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
       }, 3000);
     }
     return () => clearInterval(interval);
-  }, [isOpen, workshop, aiSummary, isQueued]);
+  }, [isOpen, activeTab, workshop, aiSummary, isQueued]);
 
   if (!isOpen) return null;
 
@@ -235,17 +240,6 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
                   />
                 </div>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Title</label>
-                <input
-                  required
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                />
               </div>
 
               <div className="space-y-1">
@@ -384,8 +378,6 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
           ) : (
             <div className="space-y-6 py-4">
               <div className="space-y-4">
-            {workshop && (
-              <div className="pt-6 border-t border-gray-100 space-y-4">
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
                   AI Summary Content (PDF Upload)
                 </label>
@@ -446,31 +438,8 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
                   </div>
                 )}
               </div>
-            )}
-
-              {aiSummary && (
-                <div className="p-6 bg-indigo-50 rounded-2xl border border-indigo-100">
-                  <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">AI Summary</h4>
-                  <p className="text-sm text-gray-700 font-medium leading-relaxed italic">&ldquo;{aiSummary}&rdquo;</p>
-                </div>
-              )}
-            <div className="flex gap-4 pt-6">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-2xl transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-2 px-12 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:grayscale"
-              >
-                {loading ? 'Saving...' : workshop ? 'Update Workshop' : 'Create Workshop'}
-              </button>
             </div>
-          </form>
+          )}
         </div>
       </div>
     </div>
