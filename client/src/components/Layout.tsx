@@ -14,7 +14,6 @@ const Layout: React.FC = () => {
   const navItems = isAdmin 
     ? [
         { label: 'Workshops', path: '/' },
-        { label: 'AI Summaries', path: '/ai-summary' },
       ]
     : [
         { label: 'Workshops', path: '/' },

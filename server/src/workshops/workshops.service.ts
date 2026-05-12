@@ -9,6 +9,7 @@ import { RegistrationStatus, WorkshopStatus, Prisma } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { WorkshopsGateway } from './workshops.gateway';
 import { QrService } from './qr.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 interface QrPayload {
   registrationId: string;
@@ -27,6 +28,7 @@ export class WorkshopsService implements OnModuleInit {
     private readonly repository: WorkshopsRepository,
     private readonly qrService: QrService,
     private readonly gateway: WorkshopsGateway,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -250,6 +252,20 @@ export class WorkshopsService implements OnModuleInit {
       await this.redis.decr(`workshop:${workshopId}:seats`);
       const newSeats = await this.getAvailableSeats(workshopId);
       this.gateway.emitSeatCountUpdate(workshopId, newSeats);
+
+      // 5. Trigger notification
+      try {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        const workshop = await this.prisma.workshop.findUnique({ where: { id: workshopId } });
+        if (user && workshop) {
+          await this.notificationsService.send(user.email, {
+            subject: `Registration Confirmed: ${workshop.title}`,
+            body: `You have successfully registered for the workshop "${workshop.title}" at ${workshop.room}. Time: ${workshop.startTime}.`,
+          });
+        }
+      } catch (err) {
+        this.logger.error(`Failed to trigger notification: ${err.message}`);
+      }
 
       return registration;
     } finally {
