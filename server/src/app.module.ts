@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { RedisModule } from './redis/redis.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SyncModule } from './sync/sync.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { SyncModule } from './sync/sync.module';
     AuthModule,
     RedisModule,
     SyncModule,
+    NotificationsModule,
   ],
 
   controllers: [AppController],

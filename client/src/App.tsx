@@ -25,18 +25,6 @@ const Dashboard = () => {
   return isAdmin ? <AdminWorkshopsPage /> : <StudentWorkshopsPage />;
 };
 
-const AiSummaryPage = () => {
-  const demoWorkshopId = '123e4567-e89b-12d3-a456-426614174000'; // Temporary fallback
-  return (
-    <div className="max-w-4xl mx-auto space-y-12">
-      <div className="text-center">
-        <h1 className="text-4xl font-black text-gray-900 tracking-tight">AI Content Generation</h1>
-        <p className="text-gray-500 mt-2">Generate summaries from workshop PDF documents.</p>
-      </div>
-      <EditWorkshop workshopId={demoWorkshopId} />
-    </div>
-  );
-};
 
 function App() {
   return (
@@ -50,7 +38,6 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<Layout />}>
                 <Route index element={<Dashboard />} />
-                <Route path="ai-summary" element={<AiSummaryPage />} />
                 <Route path="admin/workshops/:id" element={<AdminWorkshopDetail />} />
                 <Route path="admin/students" element={<AdminStudentsPage />} />
                 <Route path="checkin/:id" element={<CheckInPage />} />

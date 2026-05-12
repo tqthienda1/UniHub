@@ -23,7 +23,7 @@ const AdminWorkshopDetail = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      let url = `http://localhost:3000/admin/workshops/${id}/registrations?limit=100`;
+      let url = `http://localhost:3000/staff-portal/workshops/${id}/registrations?limit=100`;
       if (statusFilter) url += `&status=${statusFilter}`;
       
       const response = await fetch(url, {
@@ -49,7 +49,7 @@ const AdminWorkshopDetail = () => {
   const handleExport = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/admin/workshops/${id}/registrations/export`, {
+      const response = await fetch(`http://localhost:3000/staff-portal/workshops/${id}/registrations/export`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

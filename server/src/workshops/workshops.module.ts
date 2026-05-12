@@ -9,6 +9,8 @@ import { QrService } from './qr.service';
 import { WorkshopsGateway } from './workshops.gateway';
 import { WorkshopsAdminController } from './workshops-admin.controller';
 import { RegistrationsController } from './registrations.controller';
+import { RedisModule } from '../redis/redis.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { RegistrationsController } from './registrations.controller';
         duration: 60000,
       },
     }),
+    RedisModule,
+    NotificationsModule,
   ],
   controllers: [
     WorkshopsController,
