@@ -37,3 +37,4 @@ EX: when user login -> redirect to home page, when user logout -> redirect to lo
 - [x] Sync the local schema to supabase database    
 - [x] make the MSSV is not unique in the database
 - [x] sync the local schema to supabase database
+- [x] validate data on client and show it on UI, dont just return internal server error
