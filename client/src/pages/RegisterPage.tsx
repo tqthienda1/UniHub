@@ -19,8 +19,32 @@ const RegisterPage: React.FC = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  const validateForm = () => {
+    if (!formData.fullName.trim()) {
+      setError('Full Name is required');
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Invalid email address');
+      return false;
+    }
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return false;
+    }
+    if (formData.mssv && formData.mssv.trim().length < 4) {
+      setError('MSSV must be valid if provided');
+      return false;
+    }
+    setError('');
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) return;
+
     try {
       const response = await fetch('http://localhost:3000/auth/register', {
         method: 'POST',
