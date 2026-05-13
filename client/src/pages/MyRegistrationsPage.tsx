@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useNotification } from '../context/NotificationContext';
 import ConfirmModal from '../components/ConfirmModal';
 import QrModal from '../components/QrModal';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface Registration {
   id: string;
@@ -14,6 +15,7 @@ interface Registration {
     title: string;
     room: string;
     startTime: string;
+    price: number;
     aiSummary?: string | null;
   };
 }
@@ -23,8 +25,11 @@ const MyRegistrationsPage = () => {
   const [loading, setLoading] = useState(true);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [selectedReg, setSelectedReg] = useState<Registration | null>(null);
+  const [timeLeft, setTimeLeft] = useState<string>('15:00');
+  const [now, setNow] = useState(new Date());
   const [search, setSearch] = useState('');
   const { showNotification } = useNotification();
 
@@ -61,6 +66,63 @@ const MyRegistrationsPage = () => {
     };
   }, []);
 
+  // Tick every second to update timers
+  useEffect(() => {
+    const ticker = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(ticker);
+  }, []);
+
+  // Poll for status when payment modal is open
+  useEffect(() => {
+    let interval: any;
+    if (isPaymentModalOpen && selectedReg) {
+      interval = setInterval(async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await fetch(`http://localhost:3000/registrations/${selectedReg.workshopId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.status === 'CONFIRMED') {
+              showNotification('Payment confirmed!', 'success');
+              setIsPaymentModalOpen(false);
+              setSelectedReg(null);
+              fetchRegistrations();
+            }
+          }
+        } catch (e) {
+          console.error('Polling failed', e);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [isPaymentModalOpen, selectedReg]);
+
+  // Countdown timer for pending registrations
+  useEffect(() => {
+    let timer: any;
+    if (isPaymentModalOpen && selectedReg && selectedReg.status === 'PENDING') {
+      const updateTimer = () => {
+        const expiresAt = new Date(new Date(selectedReg.createdAt).getTime() + 15 * 60 * 1000);
+        const diff = expiresAt.getTime() - now.getTime();
+        
+        if (diff <= 0) {
+          setTimeLeft('00:00');
+          setIsPaymentModalOpen(false);
+          fetchRegistrations();
+          showNotification('Reservation expired', 'error');
+        } else {
+          const mins = Math.floor(diff / 60000);
+          const secs = Math.floor((diff % 60000) / 1000);
+          setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        }
+      };
+      
+      updateTimer();
+    }
+  }, [isPaymentModalOpen, selectedReg, now]);
+
   const initiateCancel = (reg: Registration) => {
     setSelectedReg(reg);
     setIsCancelModalOpen(true);
@@ -74,6 +136,11 @@ const MyRegistrationsPage = () => {
   const showSummary = (reg: Registration) => {
     setSelectedReg(reg);
     setIsSummaryModalOpen(true);
+  };
+
+  const initiatePayment = (reg: Registration) => {
+    setSelectedReg(reg);
+    setIsPaymentModalOpen(true);
   };
 
   const handleCancel = async () => {
@@ -236,13 +303,35 @@ const MyRegistrationsPage = () => {
                       </div>
                     </td>
                     <td className="px-10 py-8">
-                      <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] shadow-sm
-                        ${reg.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
-                          reg.status === 'CHECKED_IN' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' :
-                          'bg-gray-100 text-gray-500'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full mr-2 ${reg.status === 'CONFIRMED' ? 'bg-emerald-500' : reg.status === 'CHECKED_IN' ? 'bg-indigo-500' : 'bg-gray-400'}`} />
-                        {reg.status}
-                      </span>
+                      {reg.status === 'PENDING' ? (
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] shadow-sm bg-amber-100 text-amber-700 border border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full mr-2 bg-amber-500" />
+                            Waiting for Payment
+                          </span>
+                          <span className="text-[10px] font-black text-rose-500 animate-pulse ml-1">
+                            Expires in: {(() => {
+                              const expiresAt = new Date(new Date(reg.createdAt).getTime() + 15 * 60 * 1000);
+                              const diff = expiresAt.getTime() - now.getTime();
+                              if (diff <= 0) return '00:00';
+                              const mins = Math.max(0, Math.floor(diff / 60000));
+                              const secs = Math.max(0, Math.floor((diff % 60000) / 1000));
+                              return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                            })()}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] shadow-sm
+                          ${reg.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                            reg.status === 'CHECKED_IN' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' :
+                            'bg-gray-100 text-gray-500'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-2 ${
+                            reg.status === 'CONFIRMED' ? 'bg-emerald-500' : 
+                            reg.status === 'CHECKED_IN' ? 'bg-indigo-500' : 
+                            'bg-gray-400'}`} />
+                          {reg.status}
+                        </span>
+                      )}
                     </td>
                     <td className="px-10 py-8">
                       {reg.workshop.aiSummary ? (
@@ -258,6 +347,22 @@ const MyRegistrationsPage = () => {
                     </td>
                     <td className="px-10 py-8 text-right">
                       <div className="flex items-center justify-end space-x-4">
+                        {reg.status === 'PENDING' && (
+                          <>
+                            <button
+                              onClick={() => initiatePayment(reg)}
+                              className="px-4 py-2 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600 transition-all active:scale-95 shadow-lg shadow-amber-200"
+                            >
+                              Pay Now
+                            </button>
+                            <button
+                              onClick={() => initiateCancel(reg)}
+                              className="text-[10px] font-black text-rose-500 hover:text-rose-600 uppercase tracking-[0.2em] transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
                         {reg.status === 'CONFIRMED' && (
                           <>
                             <button
@@ -310,6 +415,58 @@ const MyRegistrationsPage = () => {
         token={selectedReg?.qrToken || null}
         workshopTitle={selectedReg?.workshop.title || ''}
       />
+
+      {isPaymentModalOpen && selectedReg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-[2rem] shadow-2xl animate-in zoom-in slide-in-from-bottom-8 duration-500 scrollbar-hide">
+            <div className="p-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-black text-gray-900 tracking-tight">Payment QR</h2>
+                <button onClick={() => setIsPaymentModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mb-6 flex justify-between items-center">
+                <span className="text-sm font-bold text-indigo-900">Workshop Fee</span>
+                <span className="text-xl font-black text-indigo-600">{Number(selectedReg.workshop.price).toLocaleString()}đ</span>
+              </div>
+
+              <div className="flex flex-col items-center justify-center space-y-6 py-4">
+                <div className="p-6 bg-white border-4 border-indigo-600 rounded-3xl shadow-xl">
+                  <QRCodeSVG 
+                    value={`http://192.168.1.169:3000/registrations/mock-payment/scan?workshopId=${selectedReg.workshopId}&userId=${JSON.parse(window.atob(localStorage.getItem('token')!.split('.')[1])).sub}`} 
+                    size={200} 
+                  />
+                </div>
+                
+                <div className="text-center space-y-2">
+                  <div className="flex items-center justify-center space-x-2 text-rose-500 font-black text-lg">
+                    <svg className="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Seat expires in: {timeLeft}</span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-600 italic">Scan QR to complete registration</p>
+                </div>
+
+                <div className="w-full flex items-center justify-center space-x-2 py-2">
+                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                </div>
+
+                <button
+                  onClick={() => window.open(`http://192.168.1.169:3000/registrations/mock-payment/scan?workshopId=${selectedReg.workshopId}&userId=${JSON.parse(window.atob(localStorage.getItem('token')!.split('.')[1])).sub}`, '_blank')}
+                  className="text-[10px] text-gray-300 hover:text-indigo-400 transition-colors uppercase tracking-tighter"
+                >
+                  (Mock Scan on Web)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isSummaryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-300">

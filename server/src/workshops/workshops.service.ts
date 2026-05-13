@@ -45,7 +45,7 @@ export class WorkshopsService implements OnModuleInit {
   async handleSeatReclamation() {
     this.logger.log('Running seat reclamation cron job...');
     const expirationTime = new Date();
-    expirationTime.setMinutes(expirationTime.getMinutes() - 10);
+    expirationTime.setMinutes(expirationTime.getMinutes() - 15);
 
     const staleRegistrations = await this.prisma.workshopRegistration.findMany({
       where: {
@@ -302,6 +302,7 @@ export class WorkshopsService implements OnModuleInit {
             },
             update: {
               status: initialStatus,
+              createdAt: new Date(),
             },
             create: {
               userId,
@@ -430,6 +431,7 @@ export class WorkshopsService implements OnModuleInit {
             room: true,
             category: true,
             aiSummary: true,
+            price: true,
           },
         },
       },
@@ -1040,5 +1042,49 @@ export class WorkshopsService implements OnModuleInit {
     }
 
     return { success: true, message: 'Payment confirmed via QR scan simulation' };
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleExpiredRegistrations() {
+    const expirationTime = new Date();
+    expirationTime.setMinutes(expirationTime.getMinutes() - 15); // Timeout: 15 minutes
+
+    const expiredRegistrations = await this.prisma.workshopRegistration.findMany({
+      where: {
+        status: RegistrationStatus.PENDING,
+        createdAt: { lt: expirationTime },
+      },
+    });
+
+    if (expiredRegistrations.length === 0) return;
+
+    this.logger.log(`Found ${expiredRegistrations.length} expired pending registrations`);
+
+    for (const reg of expiredRegistrations) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.workshopRegistration.update({
+            where: { id: reg.id },
+            data: { status: RegistrationStatus.EXPIRED },
+          });
+
+          await tx.workshop.update({
+            where: { id: reg.workshopId },
+            data: {
+              availableSeats: { increment: 1 },
+            },
+          });
+        });
+
+        // Update Redis cache and notify via WebSocket
+        await this.redis.incr(`workshop:${reg.workshopId}:seats`);
+        const newSeats = await this.getAvailableSeats(reg.workshopId);
+        this.gateway.emitSeatCountUpdate(reg.workshopId, newSeats);
+
+        this.logger.log(`Registration ${reg.id} for workshop ${reg.workshopId} has expired and seat released`);
+      } catch (err) {
+        this.logger.error(`Failed to expire registration ${reg.id}: ${err.message}`);
+      }
+    }
   }
 }
