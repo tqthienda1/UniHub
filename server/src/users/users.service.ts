@@ -19,9 +19,11 @@ export class UsersService {
       });
 
       if (!identity) {
-        throw new Error(`Student ID ${data.mssv} is not found in the official university records. Please contact the administrator.`);
+        throw new Error(
+          `Student ID ${data.mssv} is not found in the official university records. Please contact the administrator.`,
+        );
       }
-      
+
       // Optionally sync email/name from identity if not provided
       data.fullName = data.fullName || identity.fullName;
       data.email = data.email || identity.email;

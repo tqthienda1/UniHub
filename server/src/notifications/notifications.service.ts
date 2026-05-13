@@ -11,7 +11,8 @@ export class NotificationsService implements OnModuleInit {
   private readonly channels: INotificationChannel[] = [];
 
   constructor(
-    @InjectQueue('notification-queue') private readonly notificationQueue: Queue,
+    @InjectQueue('notification-queue')
+    private readonly notificationQueue: Queue,
     private readonly emailChannel: EmailChannel,
   ) {}
 
@@ -31,9 +32,12 @@ export class NotificationsService implements OnModuleInit {
     });
   }
 
-  async executeSend(recipient: string, payload: NotificationPayload): Promise<void> {
+  async executeSend(
+    recipient: string,
+    payload: NotificationPayload,
+  ): Promise<void> {
     this.logger.log(`Executing notification delivery to ${recipient}`);
-    
+
     const results = await Promise.allSettled(
       this.channels.map((channel) => channel.send(recipient, payload)),
     );
