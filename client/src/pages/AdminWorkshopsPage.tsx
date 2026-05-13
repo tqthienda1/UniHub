@@ -11,6 +11,7 @@ interface Workshop {
   title: string;
   room: string;
   startTime: string;
+  endTime: string;
   capacity: number;
   availableSeats: number;
   price: number;

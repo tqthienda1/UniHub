@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
 
 interface Student {
   mssv: string;
@@ -9,7 +8,6 @@ interface Student {
 }
 
 const AdminStudentsPage = () => {
-  const { user } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);

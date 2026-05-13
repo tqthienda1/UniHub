@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useNotification } from '../context/NotificationContext';
 
 interface Workshop {
   id: string;
@@ -7,10 +8,7 @@ interface Workshop {
   description: string | null;
   category: string | null;
   speakerName: string | null;
-  speakerAvatar: string | null;
-  speakerInfo: string | null;
   room: string;
-  roomDiagramUrl: string | null;
   startTime: string;
   endTime: string;
   capacity: number;
@@ -24,6 +22,8 @@ const WorkshopDetails = () => {
   const { id: workshopId } = useParams<{ id: string }>();
   const [workshop, setWorkshop] = useState<Workshop | null>(null);
   const [loading, setLoading] = useState(true);
+  const [registering, setRegistering] = useState(false);
+  const { showNotification } = useNotification();
 
   useEffect(() => {
     const fetchWorkshop = async () => {
@@ -78,6 +78,35 @@ const WorkshopDetails = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleRegister = async () => {
+    if (!workshop) return;
+    setRegistering(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3000/registrations/${workshop.id}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (response.ok) {
+        showNotification('Registered successfully!', 'success');
+        // Fetch to update available seats
+        const wsRes = await fetch(`http://localhost:3000/workshops/${workshop.id}`);
+        if (wsRes.ok) setWorkshop(await wsRes.json());
+      } else {
+        const error = await response.json();
+        showNotification(error.message || 'Registration failed', 'error');
+      }
+    } catch (error) {
+      console.error('Registration failed', error);
+      showNotification('Connection error during registration', 'error');
+    } finally {
+      setRegistering(false);
+    }
   };
 
   return (
@@ -186,45 +215,22 @@ const WorkshopDetails = () => {
           <section className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-gray-50">
             <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">Speaker</h3>
             <div className="flex items-center space-x-4 mb-6">
-              {workshop.speakerAvatar ? (
-                <img src={workshop.speakerAvatar} alt={workshop.speakerName || ''} className="w-16 h-16 rounded-2xl object-cover shadow-md" />
-              ) : (
-                <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 font-black text-2xl shadow-inner">
-                  {workshop.speakerName?.[0] || '?'}
-                </div>
-              )}
+              <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 font-black text-2xl shadow-inner">
+                {workshop.speakerName?.[0] || '?'}
+              </div>
               <div>
                 <p className="text-lg font-black text-gray-900">{workshop.speakerName || 'To be announced'}</p>
                 <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest">Keynote Speaker</p>
               </div>
             </div>
-            <p className="text-sm text-gray-500 leading-relaxed font-medium">
-              {workshop.speakerInfo || "Information about the speaker will be updated soon."}
-            </p>
           </section>
 
-          <section className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-gray-50 overflow-hidden">
-            <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">Room Layout</h3>
-            {workshop.roomDiagramUrl ? (
-              <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-inner group">
-                <img 
-                  src={workshop.roomDiagramUrl} 
-                  alt="Room Layout" 
-                  className="w-full h-auto transition-transform duration-700 group-hover:scale-110" 
-                />
-              </div>
-            ) : (
-              <div className="aspect-square bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-center p-6">
-                <svg className="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Layout map<br/>not uploaded</p>
-              </div>
-            )}
-          </section>
-
-          <button className="w-full bg-gray-900 hover:bg-black text-white py-6 rounded-3xl font-black text-xl shadow-2xl shadow-gray-200 transition-all active:scale-[0.98] uppercase tracking-widest">
-            Register Now
+          <button 
+            onClick={handleRegister}
+            disabled={workshop.availableSeats === 0 || registering}
+            className="w-full bg-gray-900 hover:bg-black disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-6 rounded-3xl font-black text-xl shadow-2xl shadow-gray-200 transition-all active:scale-[0.98] uppercase tracking-widest"
+          >
+            {registering ? 'Processing Payment...' : workshop.availableSeats === 0 ? 'Fully Booked' : 'Register Now'}
           </button>
         </div>
       </div>

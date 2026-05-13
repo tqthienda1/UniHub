@@ -50,13 +50,10 @@ model Workshop {
   description    String?
   category       String?
   speakerName    String?        @map("speaker_name")
-  speakerAvatar  String?        @map("speaker_avatar")
-  speakerInfo    String?        @map("speaker_info")
   location       String?
   room           String
-  roomDiagramUrl String?        @map("room_diagram_url")
   startTime      DateTime       @map("start_time")
-  endTime        DateTime       @map("end_time")
+  endTime        DateTime?      @map("end_time")
   capacity       Int
   availableSeats Int            @default(0) @map("available_seats")
   price          Decimal        @default(0)

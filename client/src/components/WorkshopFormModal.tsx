@@ -11,9 +11,6 @@ interface Workshop {
   price: number;
   category: string;
   speakerName?: string;
-  speakerAvatar?: string;
-  speakerInfo?: string;
-  roomDiagramUrl?: string;
   aiSummary?: string | null;
 }
 
@@ -35,9 +32,6 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
     price: 0,
     category: '',
     speakerName: '',
-    speakerAvatar: '',
-    speakerInfo: '',
-    roomDiagramUrl: '',
   });
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -58,9 +52,6 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
         price: workshop.price,
         category: workshop.category,
         speakerName: workshop.speakerName || '',
-        speakerAvatar: workshop.speakerAvatar || '',
-        speakerInfo: workshop.speakerInfo || '',
-        roomDiagramUrl: workshop.roomDiagramUrl || '',
       });
       setAiSummary(workshop.aiSummary || null);
     } else {
@@ -74,9 +65,6 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
         price: 0,
         category: '',
         speakerName: '',
-        speakerAvatar: '',
-        speakerInfo: '',
-        roomDiagramUrl: '',
       });
       setAiSummary(null);
     }
@@ -292,48 +280,17 @@ const WorkshopFormModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, worksh
 
             <div className="border-t border-gray-100 pt-4 mt-4">
               <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4">Speaker Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Speaker Name</label>
-                  <input
-                    type="text"
-                    value={formData.speakerName}
-                    onChange={(e) => setFormData({ ...formData, speakerName: e.target.value })}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Speaker Avatar URL</label>
-                  <input
-                    type="text"
-                    value={formData.speakerAvatar}
-                    onChange={(e) => setFormData({ ...formData, speakerAvatar: e.target.value })}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1 mt-4">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Speaker Info/Bio</label>
-                <textarea
-                  value={formData.speakerInfo}
-                  onChange={(e) => setFormData({ ...formData, speakerInfo: e.target.value })}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none h-20 resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100 pt-4 mt-4">
-              <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4">Room Layout</h3>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Room Diagram URL</label>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Speaker Name</label>
                 <input
                   type="text"
-                  value={formData.roomDiagramUrl}
-                  onChange={(e) => setFormData({ ...formData, roomDiagramUrl: e.target.value })}
+                  value={formData.speakerName}
+                  onChange={(e) => setFormData({ ...formData, speakerName: e.target.value })}
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
                 />
               </div>
             </div>
+
 
             {workshop && (
               <div className="pt-6 border-t border-gray-100 space-y-4">

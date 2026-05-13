@@ -5,6 +5,7 @@ import {
   Param,
   UseGuards,
   Req,
+  Headers,
 } from '@nestjs/common';
 import { WorkshopsService } from './workshops.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -26,10 +27,14 @@ export class RegistrationsController {
   }
 
   @Post(':workshopId')
-
-  async register(@Param('workshopId') workshopId: string, @Req() req: AuthenticatedRequest) {
-    console.log(`POST /registrations/${workshopId} from user ${req.user.id}`);
-    return this.workshopsService.register(workshopId, req.user.id);
+  async register(
+    @Param('workshopId') workshopId: string,
+    @Req() req: AuthenticatedRequest,
+    @Headers('x-test-payment-timeout') testTimeoutHeader?: string,
+  ) {
+    const forceTimeout = testTimeoutHeader === 'true';
+    console.log(`POST /registrations/${workshopId} from user ${req.user.id} (forceTimeout=${forceTimeout})`);
+    return this.workshopsService.register(workshopId, req.user.id, forceTimeout);
   }
 
 

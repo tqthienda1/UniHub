@@ -13,7 +13,6 @@ import StudentWorkshopsPage from './pages/StudentWorkshopsPage';
 import AdminWorkshopsPage from './pages/AdminWorkshopsPage';
 import AdminWorkshopDetail from './pages/AdminWorkshopDetail';
 import MyRegistrationsPage from './pages/MyRegistrationsPage';
-import EditWorkshop from './workshops/EditWorkshop';
 import WorkshopDetails from './workshops/WorkshopDetails';
 import CheckInPage from './pages/CheckInPage';
 import AdminStudentsPage from './pages/AdminStudentsPage';

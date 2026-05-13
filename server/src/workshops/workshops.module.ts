@@ -11,6 +11,7 @@ import { WorkshopsAdminController } from './workshops-admin.controller';
 import { RegistrationsController } from './registrations.controller';
 import { RedisModule } from '../redis/redis.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     }),
     RedisModule,
     NotificationsModule,
+    PaymentsModule,
   ],
   controllers: [
     WorkshopsController,
