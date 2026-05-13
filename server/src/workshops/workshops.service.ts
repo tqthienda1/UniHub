@@ -10,6 +10,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { WorkshopsGateway } from './workshops.gateway';
 import { QrService } from './qr.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PaymentService } from '../payments/payment.service';
 
 interface QrPayload {
   registrationId: string;
@@ -29,6 +30,7 @@ export class WorkshopsService implements OnModuleInit {
     private readonly qrService: QrService,
     private readonly gateway: WorkshopsGateway,
     private readonly notificationsService: NotificationsService,
+    private readonly paymentService: PaymentService,
   ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -190,7 +192,7 @@ export class WorkshopsService implements OnModuleInit {
     };
   }
 
-  async register(workshopId: string, userId: string) {
+  async register(workshopId: string, userId: string, forceTimeout = false) {
     this.logger.log(`Student ${userId} attempting to register for workshop ${workshopId}`);
     
     // 0. Verify student identity against authoritative Source of Truth
@@ -222,55 +224,100 @@ export class WorkshopsService implements OnModuleInit {
     }
 
     try {
+      const workshopDetail = await this.repository.findOne(workshopId);
+      if (!workshopDetail) throw new Error('Workshop not found');
+
+      const isPaid = workshopDetail.price && workshopDetail.price.toNumber() > 0;
+      const initialStatus = isPaid ? RegistrationStatus.PENDING : RegistrationStatus.CONFIRMED;
+
       // 1. Check if already registered
-      const existing = await this.repository.findRegistration(
+      let existing = await this.repository.findRegistration(
         userId,
         workshopId,
       );
+
+      let registration = existing;
+      let needsSeatAllocation = true;
+
       if (
         existing &&
         existing.status !== RegistrationStatus.CANCELLED &&
         existing.status !== RegistrationStatus.EXPIRED
       ) {
-        throw new Error('Already registered for this workshop');
+        if (existing.status === RegistrationStatus.PENDING) {
+          // Already have a reserved seat, just need to retry payment
+          needsSeatAllocation = false;
+        } else {
+          throw new Error('Already registered for this workshop');
+        }
       }
 
-      // 2. Check seats in Redis
-      const availableSeats = await this.getAvailableSeats(workshopId);
-      if (availableSeats <= 0) {
-        throw new Error('No seats available');
+      if (needsSeatAllocation) {
+        // 2. Check seats in Redis
+        const availableSeats = await this.getAvailableSeats(workshopId);
+        if (availableSeats <= 0) {
+          throw new Error('No seats available');
+        }
+
+        // 3. Create registration and decrement seats
+        registration = await this.prisma.$transaction(async (tx) => {
+          const reg = await tx.workshopRegistration.upsert({
+            where: {
+              userId_workshopId: { userId, workshopId },
+            },
+            update: {
+              status: initialStatus,
+            },
+            create: {
+              userId,
+              workshopId,
+              status: initialStatus,
+            },
+          });
+
+          await tx.workshop.update({
+            where: { id: workshopId },
+            data: {
+              availableSeats: { decrement: 1 },
+            },
+          });
+
+          return reg;
+        });
+
+        // 4. Update Redis
+        await this.redis.decr(`workshop:${workshopId}:seats`);
+        const newSeats = await this.getAvailableSeats(workshopId);
+        this.gateway.emitSeatCountUpdate(workshopId, newSeats);
       }
 
-      // 3. Create registration and decrement seats
-      const registration = await this.prisma.$transaction(async (tx) => {
-        const reg = await tx.workshopRegistration.upsert({
-          where: {
-            userId_workshopId: { userId, workshopId },
-          },
-          update: {
-            status: RegistrationStatus.CONFIRMED,
-          },
-          create: {
-            userId,
-            workshopId,
-            status: RegistrationStatus.CONFIRMED,
-          },
-        });
+      // Release lock before payment to avoid blocking others
+      await this.redis.del(lockKey);
 
-        await tx.workshop.update({
-          where: { id: workshopId },
-          data: {
-            availableSeats: { decrement: 1 },
-          },
-        });
+      if (!registration) {
+        throw new Error('Critical error: Registration was not properly initialized.');
+      }
 
-        return reg;
-      });
+      // 5. Process Payment if needed
+      if (isPaid && registration.status === RegistrationStatus.PENDING) {
+        try {
+          const paymentResult = await this.paymentService.processPayment(
+            workshopDetail.price.toNumber(),
+            registration.id, // Idempotency key
+            forceTimeout,
+          );
 
-      // 4. Update Redis
-      await this.redis.decr(`workshop:${workshopId}:seats`);
-      const newSeats = await this.getAvailableSeats(workshopId);
-      this.gateway.emitSeatCountUpdate(workshopId, newSeats);
+          if (paymentResult.success) {
+            registration = await this.prisma.workshopRegistration.update({
+              where: { id: registration.id },
+              data: { status: RegistrationStatus.CONFIRMED }
+            });
+          }
+        } catch (paymentErr) {
+          this.logger.error(`Payment failed or timed out: ${paymentErr.message}`);
+          throw new HttpException('Payment processing failed or timed out. Your seat is reserved. Please try registering again to retry payment.', 504);
+        }
+      }
 
       // 5. Trigger notification
       try {
@@ -288,8 +335,11 @@ export class WorkshopsService implements OnModuleInit {
 
       return registration;
     } finally {
-      // Release lock
-      await this.redis.del(lockKey);
+      // Ensure lock is released if it wasn't released before payment
+      const lockExists = await this.redis.get(lockKey);
+      if (lockExists) {
+        await this.redis.del(lockKey);
+      }
     }
   }
 

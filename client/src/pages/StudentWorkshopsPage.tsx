@@ -18,37 +18,46 @@ interface Workshop {
 const StudentWorkshopsPage = () => {
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
   const [myRegistrations, setMyRegistrations] = useState<string[]>([]);
+  const [myPendingRegistrations, setMyPendingRegistrations] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [registeringId, setRegisteringId] = useState<string | null>(null);
   const { showNotification } = useNotification();
 
   const fetchData = async () => {
+    // Fetch workshop list independently — a registration error must never blank the list
     try {
-      const token = localStorage.getItem('token');
-      const [workshopsRes, registrationsRes] = await Promise.all([
-        fetch('http://localhost:3000/workshops'),
-        fetch('http://localhost:3000/registrations/me', {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ]);
-
+      const workshopsRes = await fetch('http://localhost:3000/workshops');
       if (workshopsRes.ok) {
         const data = await workshopsRes.json();
-        setWorkshops(data.items);
-      }
-
-      if (registrationsRes.ok) {
-        const regs = await registrationsRes.json();
-        // Filter out cancelled registrations
-        const activeRegs = regs
-          .filter((r: any) => r.status !== 'CANCELLED')
-          .map((r: any) => r.workshopId);
-        setMyRegistrations(activeRegs);
+        setWorkshops(data.items ?? []);
       }
     } catch (error) {
-      console.error('Failed to fetch data', error);
+      console.error('Failed to fetch workshops', error);
       showNotification('Could not load workshop data', 'error');
     } finally {
       setLoading(false);
+    }
+
+    // Fetch registrations separately — failure here only affects button state, not the list
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const registrationsRes = await fetch('http://localhost:3000/registrations/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (registrationsRes.ok) {
+        const regs = await registrationsRes.json();
+        const activeRegs = regs
+          .filter((r: any) => r.status !== 'CANCELLED' && r.status !== 'EXPIRED')
+          .map((r: any) => r.workshopId);
+        const pendingRegs = regs
+          .filter((r: any) => r.status === 'PENDING')
+          .map((r: any) => r.workshopId);
+        setMyRegistrations(activeRegs);
+        setMyPendingRegistrations(pendingRegs);
+      }
+    } catch (error) {
+      console.error('Failed to fetch registrations', error);
     }
   };
 
@@ -57,6 +66,7 @@ const StudentWorkshopsPage = () => {
   }, []);
 
   const handleRegister = async (id: string) => {
+    setRegisteringId(id);
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:3000/registrations/${id}`, {
@@ -76,6 +86,8 @@ const StudentWorkshopsPage = () => {
     } catch (error) {
       console.error('Registration failed', error);
       showNotification('Connection error during registration', 'error');
+    } finally {
+      setRegisteringId(null);
     }
   };
 
@@ -109,6 +121,7 @@ const StudentWorkshopsPage = () => {
         ) : (
           workshops.map((workshop) => {
             const isRegistered = myRegistrations.includes(workshop.id);
+            const isPending = myPendingRegistrations.includes(workshop.id);
             return (
               <div key={workshop.id} className="group bg-white rounded-3xl p-8 shadow-xl border border-gray-100 transition-all hover:shadow-2xl hover:-translate-y-1">
                 <div className="flex justify-between items-start mb-6">
@@ -156,16 +169,22 @@ const StudentWorkshopsPage = () => {
 
                 <button
                   onClick={() => !isRegistered && handleRegister(workshop.id)}
-                  disabled={workshop.availableSeats === 0 || isRegistered}
+                  disabled={workshop.availableSeats === 0 || isRegistered || registeringId === workshop.id}
                   className={`w-full py-4 rounded-2xl font-bold transition-all active:scale-95 shadow-lg
                     ${isRegistered 
                       ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-none cursor-default'
-                      : workshop.availableSeats === 0 
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
-                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100'}`}
+                      : isPending
+                        ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 shadow-amber-100'
+                        : workshop.availableSeats === 0 
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100 disabled:bg-indigo-400 disabled:cursor-wait'}`}
                 >
-                  {isRegistered 
-                    ? '✓ Registered' 
+                  {registeringId === workshop.id
+                    ? 'Processing Payment...'
+                    : isRegistered 
+                    ? '✓ Registered'
+                    : isPending
+                    ? '⏳ Payment Pending — Tap to Retry'
                     : workshop.availableSeats === 0 ? 'Fully Booked' : 'Register Now'}
                 </button>
               </div>
