@@ -10,6 +10,8 @@ import { RedisModule } from './redis/redis.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SyncModule } from './sync/sync.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -20,6 +22,10 @@ import { NotificationsModule } from './notifications/notifications.module';
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
       },
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 10, // Giới hạn 10 request / 60 giây để dễ dàng demo lỗi 429
+    }]),
     WorkshopsModule,
     PrismaModule,
     UsersModule,
@@ -30,6 +36,12 @@ import { NotificationsModule } from './notifications/notifications.module';
   ],
 
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
