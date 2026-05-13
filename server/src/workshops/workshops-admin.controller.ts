@@ -138,4 +138,3 @@ export class WorkshopsAdminController {
     return this.workshopsService.updateRegistrationStatus(id, status);
   }
 }
-
