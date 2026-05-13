@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useNotification } from '../context/NotificationContext';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface Workshop {
   id: string;
@@ -11,12 +12,24 @@ interface Workshop {
   room: string;
   startTime: string;
   endTime: string;
+  registrationOpenAt: string | null;
+  registrationCloseAt: string | null;
   capacity: number;
   availableSeats: number;
   price: number;
   aiSummary: string | null;
   status: string;
 }
+
+const decodeToken = (token: string) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(window.atob(base64));
+  } catch (e) {
+    return null;
+  }
+};
 
 const WorkshopDetails = () => {
   const { id: workshopId } = useParams<{ id: string }>();
@@ -25,21 +38,21 @@ const WorkshopDetails = () => {
   const [registering, setRegistering] = useState(false);
   const { showNotification } = useNotification();
 
-  useEffect(() => {
-    const fetchWorkshop = async () => {
-      try {
-        const response = await fetch(`http://localhost:3000/workshops/${workshopId}`);
-        if (response.ok) {
-          const data = await response.json();
-          setWorkshop(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch workshop', error);
-      } finally {
-        setLoading(false);
+  const fetchWorkshop = async () => {
+    try {
+      const response = await fetch(`http://localhost:3000/workshops/${workshopId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setWorkshop(data);
       }
-    };
+    } catch (error) {
+      console.error('Failed to fetch workshop', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchWorkshop();
     
     const interval = setInterval(() => {
@@ -50,6 +63,34 @@ const WorkshopDetails = () => {
 
     return () => clearInterval(interval);
   }, [workshopId, workshop?.aiSummary]);
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+  // Poll for registration status when payment modal is open
+  useEffect(() => {
+    let interval: any;
+    if (showPaymentModal && workshop) {
+      interval = setInterval(async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await fetch(`http://localhost:3000/registrations/${workshop.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (response.ok) {
+            const registration = await response.json();
+            if (registration && registration.status === 'CONFIRMED') {
+              showNotification('Payment confirmed! Registration successful.', 'success');
+              setShowPaymentModal(false);
+              fetchWorkshop();
+            }
+          }
+        } catch (e) {
+          console.error('Polling for registration status failed', e);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [showPaymentModal, workshop]);
 
   if (loading) return (
     <div className="max-w-5xl mx-auto mt-10 p-8 space-y-8 animate-pulse">
@@ -80,9 +121,37 @@ const WorkshopDetails = () => {
     });
   };
 
-  const handleRegister = async () => {
+  const getRegistrationStatus = (): {
+    canRegister: boolean;
+    buttonText: string;
+    buttonClass: string;
+  } => {
+    const now = new Date();
+    const startTime = new Date(workshop.startTime);
+
+    if (startTime < now) {
+      return { canRegister: false, buttonText: 'Workshop Ended', buttonClass: 'bg-gray-400 cursor-not-allowed' };
+    }
+    if (workshop.registrationOpenAt && now < new Date(workshop.registrationOpenAt)) {
+      return {
+        canRegister: false,
+        buttonText: `Opens ${new Date(workshop.registrationOpenAt).toLocaleDateString('vi-VN')}`,
+        buttonClass: 'bg-amber-400 cursor-not-allowed',
+      };
+    }
+    if (workshop.registrationCloseAt && now > new Date(workshop.registrationCloseAt)) {
+      return { canRegister: false, buttonText: 'Registration Closed', buttonClass: 'bg-gray-400 cursor-not-allowed' };
+    }
+    if (workshop.availableSeats === 0) {
+      return { canRegister: false, buttonText: 'Fully Booked', buttonClass: 'bg-gray-400 cursor-not-allowed' };
+    }
+    return { canRegister: true, buttonText: 'Register Now', buttonClass: 'bg-gray-900 hover:bg-black' };
+  };
+
+  const executeRegistration = async () => {
     if (!workshop) return;
     setRegistering(true);
+    console.log('Starting registration for workshop:', workshop.id);
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:3000/registrations/${workshop.id}`, {
@@ -92,11 +161,18 @@ const WorkshopDetails = () => {
           'Content-Type': 'application/json',
         },
       });
+      console.log('Response status:', response.status);
       if (response.ok) {
-        showNotification('Registered successfully!', 'success');
-        // Fetch to update available seats
-        const wsRes = await fetch(`http://localhost:3000/workshops/${workshop.id}`);
-        if (wsRes.ok) setWorkshop(await wsRes.json());
+        const data = await response.json();
+        console.log('Registration data:', data);
+        if (data.status === 'PENDING') {
+          console.log('Setting showPaymentModal to true');
+          setShowPaymentModal(true);
+        } else {
+          showNotification('Registered successfully!', 'success');
+          fetchWorkshop();
+          setShowPaymentModal(false);
+        }
       } else {
         const error = await response.json();
         showNotification(error.message || 'Registration failed', 'error');
@@ -108,6 +184,17 @@ const WorkshopDetails = () => {
       setRegistering(false);
     }
   };
+
+  const handleRegisterClick = () => {
+    console.log('Register button clicked');
+    if (!workshop) return;
+    executeRegistration();
+  };
+
+  // Get User ID for QR code
+  const token = localStorage.getItem('token');
+  const userId = token ? decodeToken(token)?.sub : null;
+  const qrValue = `http://192.168.1.169:3000/registrations/mock-payment/scan?workshopId=${workshop.id}&userId=${userId}`;
 
   return (
     <div className="max-w-5xl mx-auto mt-10 space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -176,6 +263,31 @@ const WorkshopDetails = () => {
             </div>
           </div>
         </div>
+
+        {/* Registration Window */}
+        {(workshop.registrationOpenAt || workshop.registrationCloseAt) && (
+          <div className="mt-6 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 text-emerald-700">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-[10px] font-black uppercase tracking-widest">Registration Window</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
+              {workshop.registrationOpenAt && (
+                <span className="px-3 py-1 bg-white rounded-lg border border-emerald-200">
+                  Opens: {new Date(workshop.registrationOpenAt).toLocaleString('vi-VN')}
+                </span>
+              )}
+              {workshop.registrationOpenAt && workshop.registrationCloseAt && <span className="text-emerald-400">→</span>}
+              {workshop.registrationCloseAt && (
+                <span className="px-3 py-1 bg-white rounded-lg border border-emerald-200">
+                  Closes: {new Date(workshop.registrationCloseAt).toLocaleString('vi-VN')}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -225,15 +337,66 @@ const WorkshopDetails = () => {
             </div>
           </section>
 
-          <button 
-            onClick={handleRegister}
-            disabled={workshop.availableSeats === 0 || registering}
-            className="w-full bg-gray-900 hover:bg-black disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-6 rounded-3xl font-black text-xl shadow-2xl shadow-gray-200 transition-all active:scale-[0.98] uppercase tracking-widest"
-          >
-            {registering ? 'Processing Payment...' : workshop.availableSeats === 0 ? 'Fully Booked' : 'Register Now'}
-          </button>
+          {(() => {
+            const { canRegister, buttonText, buttonClass } = getRegistrationStatus();
+            return (
+              <button
+                onClick={canRegister ? handleRegisterClick : undefined}
+                disabled={!canRegister || registering}
+                className={`w-full ${buttonClass} disabled:cursor-not-allowed text-white py-6 rounded-3xl font-black text-xl shadow-2xl shadow-gray-200 transition-all active:scale-[0.98] uppercase tracking-widest`}
+              >
+                {registering ? 'Processing...' : buttonText}
+              </button>
+            );
+          })()}
         </div>
       </div>
+
+      {/* Mock Payment Modal (QR Code) */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in slide-in-from-bottom-8 duration-500">
+            <div className="p-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-black text-gray-900 tracking-tight">Payment QR</h2>
+                <button onClick={() => setShowPaymentModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mb-6 flex justify-between items-center">
+                <span className="text-sm font-bold text-indigo-900">Amount to Pay</span>
+                <span className="text-xl font-black text-indigo-600">{Number(workshop.price).toLocaleString()}đ</span>
+              </div>
+
+              <div className="flex flex-col items-center justify-center space-y-6 py-4">
+                <div className="p-6 bg-white border-4 border-indigo-600 rounded-3xl shadow-xl">
+                  <QRCodeSVG value={qrValue} size={200} />
+                </div>
+                
+                <div className="text-center space-y-2">
+                  <p className="text-sm font-bold text-gray-600">Scan this QR with your phone to pay</p>
+                  <p className="text-xs text-gray-400 italic">Waiting for scan confirmation...</p>
+                </div>
+
+                <div className="w-full flex items-center justify-center space-x-2 py-2">
+                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                </div>
+
+                {/* Secret simulation button for testing on the same machine */}
+                <button
+                  onClick={() => window.open(qrValue, '_blank')}
+                  className="text-[10px] text-gray-300 hover:text-indigo-400 transition-colors uppercase tracking-tighter"
+                >
+                  (Mock Scan on Web)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
