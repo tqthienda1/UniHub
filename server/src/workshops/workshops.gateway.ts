@@ -48,7 +48,10 @@ export class WorkshopsGateway {
     });
   }
 
-  emitCheckInUpdate(workshopId: string, stats: { registeredCount: number, checkedInCount: number }) {
+  emitCheckInUpdate(
+    workshopId: string,
+    stats: { registeredCount: number; checkedInCount: number },
+  ) {
     this.server.to(`workshop:${workshopId}`).emit('check-in-updated', {
       workshopId,
       ...stats,
