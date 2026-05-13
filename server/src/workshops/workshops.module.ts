@@ -32,7 +32,6 @@ import { PaymentsModule } from '../payments/payments.module';
     RegistrationsController,
   ],
 
-
   providers: [
     WorkshopsService,
     AiSummaryService,

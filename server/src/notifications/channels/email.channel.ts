@@ -9,7 +9,11 @@ export class EmailChannel implements INotificationChannel {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    if (
+      !process.env.SMTP_HOST ||
+      !process.env.SMTP_USER ||
+      !process.env.SMTP_PASS
+    ) {
       this.logger.warn(
         'SMTP configuration is missing. Email notifications may not work.',
       );
@@ -37,7 +41,9 @@ export class EmailChannel implements INotificationChannel {
       });
       this.logger.log(`Email sent successfully to ${recipient}`);
     } catch (error) {
-      this.logger.error(`Failed to send email to ${recipient}: ${error.message}`);
+      this.logger.error(
+        `Failed to send email to ${recipient}: ${error.message}`,
+      );
       throw error;
     }
   }

@@ -1,4 +1,12 @@
-import { Injectable, Logger, OnModuleInit, ConflictException, BadRequestException, NotFoundException, HttpException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  ConflictException,
+  BadRequestException,
+  NotFoundException,
+  HttpException,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 import { PrismaService } from '../prisma/prisma.service';
@@ -131,6 +139,7 @@ export class WorkshopsService implements OnModuleInit {
 
     const where: Prisma.WorkshopWhereInput = {
       status: 'PUBLISHED',
+      startTime: { gte: new Date() }, // Only show upcoming workshops
     };
 
     if (keyword) {
@@ -149,8 +158,12 @@ export class WorkshopsService implements OnModuleInit {
     }
 
     if (startDate || endDate) {
-      const startTime: Prisma.DateTimeFilter = {};
-      if (startDate) startTime.gte = startDate;
+      const startTime: Prisma.DateTimeFilter = where.startTime as Prisma.DateTimeFilter;
+      if (startDate) {
+        // Ensure we don't show past workshops even if startDate is in the past
+        const effectiveStart = startDate > new Date() ? startDate : new Date();
+        startTime.gte = effectiveStart;
+      }
       if (endDate) startTime.lte = endDate;
       where.startTime = startTime;
     }
@@ -193,23 +206,29 @@ export class WorkshopsService implements OnModuleInit {
   }
 
   async register(workshopId: string, userId: string, forceTimeout = false) {
-    this.logger.log(`Student ${userId} attempting to register for workshop ${workshopId}`);
-    
+    this.logger.log(
+      `Student ${userId} attempting to register for workshop ${workshopId}`,
+    );
+
     // 0. Verify student identity against authoritative Source of Truth
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
     if (user.role === 'STUDENT') {
       if (!user.mssv) {
-        throw new BadRequestException('Your account is missing MSSV. Please update your profile.');
+        throw new BadRequestException(
+          'Your account is missing MSSV. Please update your profile.',
+        );
       }
 
       const identity = await this.prisma.studentIdentity.findUnique({
-        where: { mssv: user.mssv }
+        where: { mssv: user.mssv },
       });
 
       if (!identity) {
-        throw new BadRequestException(`Your Student ID (${user.mssv}) is not recognized in the university's official records. Only verified students can register.`);
+        throw new BadRequestException(
+          `Your Student ID (${user.mssv}) is not recognized in the university's official records. Only verified students can register.`,
+        );
       }
     }
 
@@ -227,11 +246,27 @@ export class WorkshopsService implements OnModuleInit {
       const workshopDetail = await this.repository.findOne(workshopId);
       if (!workshopDetail) throw new Error('Workshop not found');
 
-      const isPaid = workshopDetail.price && workshopDetail.price.toNumber() > 0;
-      const initialStatus = isPaid ? RegistrationStatus.PENDING : RegistrationStatus.CONFIRMED;
+      // Check registration window
+      const now = new Date();
+      if (workshopDetail.registrationOpenAt && now < workshopDetail.registrationOpenAt) {
+        throw new BadRequestException(
+          `Registration is not open yet. It opens on ${workshopDetail.registrationOpenAt.toLocaleString()}.`,
+        );
+      }
+      if (workshopDetail.registrationCloseAt && now > workshopDetail.registrationCloseAt) {
+        throw new BadRequestException(
+          `Registration has closed for this workshop.`,
+        );
+      }
+
+      const isPaid =
+        workshopDetail.price && workshopDetail.price.toNumber() > 0;
+      const initialStatus = isPaid
+        ? RegistrationStatus.PENDING
+        : RegistrationStatus.CONFIRMED;
 
       // 1. Check if already registered
-      let existing = await this.repository.findRegistration(
+      const existing = await this.repository.findRegistration(
         userId,
         workshopId,
       );
@@ -295,42 +330,36 @@ export class WorkshopsService implements OnModuleInit {
       await this.redis.del(lockKey);
 
       if (!registration) {
-        throw new Error('Critical error: Registration was not properly initialized.');
+        throw new Error(
+          'Critical error: Registration was not properly initialized.',
+        );
       }
 
-      // 5. Process Payment if needed
-      if (isPaid && registration.status === RegistrationStatus.PENDING) {
-        try {
-          const paymentResult = await this.paymentService.processPayment(
-            workshopDetail.price.toNumber(),
-            registration.id, // Idempotency key
-            forceTimeout,
-          );
+      // 5. Registration created/retrieved as PENDING for paid workshops
+      // Payment will be handled via QR scan simulation manually.
 
-          if (paymentResult.success) {
-            registration = await this.prisma.workshopRegistration.update({
-              where: { id: registration.id },
-              data: { status: RegistrationStatus.CONFIRMED }
+
+      // 6. Trigger notification ONLY if confirmed (free workshops)
+      // For paid workshops, notification is sent in mockQrPayment
+      if (registration.status === RegistrationStatus.CONFIRMED) {
+        try {
+          const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+          });
+          const workshop = await this.prisma.workshop.findUnique({
+            where: { id: workshopId },
+          });
+          if (user && workshop) {
+            await this.notificationsService.send(user.email, {
+              subject: `Registration Confirmed: ${workshop.title}`,
+              body: `You have successfully registered for the workshop "${workshop.title}" at ${workshop.room}. Time: ${workshop.startTime.toLocaleString()}.`,
             });
           }
-        } catch (paymentErr) {
-          this.logger.error(`Payment failed or timed out: ${paymentErr.message}`);
-          throw new HttpException('Payment processing failed or timed out. Your seat is reserved. Please try registering again to retry payment.', 504);
+        } catch (err) {
+          this.logger.error(
+            `Failed to trigger notification: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
-      }
-
-      // 5. Trigger notification
-      try {
-        const user = await this.prisma.user.findUnique({ where: { id: userId } });
-        const workshop = await this.prisma.workshop.findUnique({ where: { id: workshopId } });
-        if (user && workshop) {
-          await this.notificationsService.send(user.email, {
-            subject: `Registration Confirmed: ${workshop.title}`,
-            body: `You have successfully registered for the workshop "${workshop.title}" at ${workshop.room}. Time: ${workshop.startTime}.`,
-          });
-        }
-      } catch (err) {
-        this.logger.error(`Failed to trigger notification: ${err.message}`);
       }
 
       return registration;
@@ -344,12 +373,13 @@ export class WorkshopsService implements OnModuleInit {
   }
 
   async cancelRegistration(registrationId: string, userId: string) {
-    this.logger.log(`Student ${userId} attempting to cancel registration ${registrationId}`);
+    this.logger.log(
+      `Student ${userId} attempting to cancel registration ${registrationId}`,
+    );
     const registration = await this.prisma.workshopRegistration.findUnique({
       where: { id: registrationId },
       include: { workshop: true },
     });
-
 
     if (!registration || registration.userId !== userId) {
       throw new Error('Registration not found');
@@ -413,13 +443,11 @@ export class WorkshopsService implements OnModuleInit {
         reg.status === RegistrationStatus.CONFIRMED
           ? this.qrService.generate(reg)
           : null,
-
     }));
   }
 
   async getMyRegistration(workshopId: string, userId: string) {
     const registration = await this.repository.findRegistration(
-
       userId,
       workshopId,
     );
@@ -607,15 +635,120 @@ export class WorkshopsService implements OnModuleInit {
     });
   }
 
+  /**
+   * Validates that all workshop dates are logically consistent.
+   * Rules:
+   *  - registrationOpenAt < registrationCloseAt
+   *  - registrationCloseAt <= startTime  (registration must close before workshop starts)
+   *  - startTime < endTime  (if endTime is provided)
+   *  - On create: registrationOpenAt must be in the future
+   */
+  private validateWorkshopDates(
+    data: {
+      startTime?: Date | string | null;
+      endTime?: Date | string | null;
+      registrationOpenAt?: Date | string | null;
+      registrationCloseAt?: Date | string | null;
+    },
+    isCreate = false,
+  ) {
+    const toDate = (v: Date | string | null | undefined): Date | null =>
+      v ? new Date(v) : null;
+
+    const start = toDate(data.startTime);
+    const end = toDate(data.endTime);
+    const regOpen = toDate(data.registrationOpenAt);
+    const regClose = toDate(data.registrationCloseAt);
+    const now = new Date();
+
+    // Workshop end must be after start
+    if (start && end && end <= start) {
+      throw new BadRequestException(
+        'Workshop end time must be after start time',
+      );
+    }
+
+    // Both registration dates must be provided together
+    if ((regOpen && !regClose) || (!regOpen && regClose)) {
+      throw new BadRequestException(
+        'Both registration open and close dates must be provided together',
+      );
+    }
+
+    if (regOpen && regClose) {
+      // Registration window must be valid
+      if (regClose <= regOpen) {
+        throw new BadRequestException(
+          'Registration close date must be after the open date',
+        );
+      }
+
+      // Registration must close before the workshop starts
+      if (start && regClose > start) {
+        throw new BadRequestException(
+          'Registration must close before or when the workshop starts',
+        );
+      }
+
+      // On create: registration open date must be in the future
+      if (isCreate && regOpen <= now) {
+        throw new BadRequestException(
+          'Registration open date must be in the future',
+        );
+      }
+    }
+  }
+
   async createWorkshop(data: Prisma.WorkshopCreateInput) {
+    this.validateWorkshopDates(
+      {
+        startTime: data.startTime as string | Date,
+        endTime: data.endTime as string | Date | null | undefined,
+        registrationOpenAt: data.registrationOpenAt as string | Date | null | undefined,
+        registrationCloseAt: data.registrationCloseAt as string | Date | null | undefined,
+      },
+      true,
+    );
     return this.repository.create({
       ...data,
       availableSeats: data.capacity,
       status: WorkshopStatus.DRAFT,
+      aiSummary: data.aiSummary || 'Chưa có thông tin tóm tắt.',
     });
   }
 
   async updateWorkshop(id: string, data: Prisma.WorkshopUpdateInput) {
+    const workshop = await this.repository.findOne(id);
+    if (!workshop) {
+      throw new Error('Workshop not found');
+    }
+
+    if (workshop.startTime < new Date()) {
+      throw new BadRequestException(
+        'Cannot edit a workshop that has already started',
+      );
+    }
+
+    // Validate dates — merge incoming values with existing ones
+    const resolveField = <T>(incoming: T | undefined, existing: T): T =>
+      incoming !== undefined ? incoming : existing;
+
+    this.validateWorkshopDates({
+      startTime: resolveField(data.startTime as Date | string, workshop.startTime),
+      endTime: resolveField(
+        data.endTime as Date | string | null,
+        workshop.endTime,
+      ),
+      registrationOpenAt: resolveField(
+        data.registrationOpenAt as Date | string | null,
+        workshop.registrationOpenAt,
+      ),
+      registrationCloseAt: resolveField(
+        data.registrationCloseAt as Date | string | null,
+        workshop.registrationCloseAt,
+      ),
+    });
+
     if (data.capacity !== undefined) {
       const capacityValue =
         typeof data.capacity === 'number'
@@ -642,10 +775,6 @@ export class WorkshopsService implements OnModuleInit {
       }
 
       // Update available seats if capacity changes
-      const workshop = await this.repository.findOne(id);
-      if (!workshop) {
-        throw new Error('Workshop not found');
-      }
       const diff = capacityValue - workshop.capacity;
       data.availableSeats = workshop.availableSeats + diff;
     }
@@ -690,11 +819,18 @@ export class WorkshopsService implements OnModuleInit {
     );
     this.gateway.emitSeatCountUpdate(id, updated.availableSeats);
 
-
     return updated;
   }
 
   async cancelWorkshop(id: string) {
+    const workshop = await this.prisma.workshop.findUnique({ where: { id } });
+    if (!workshop) throw new Error('Workshop not found');
+
+    if (workshop.startTime < new Date()) {
+      throw new BadRequestException(
+        'Cannot cancel a workshop that has already started',
+      );
+    }
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Cancel workshop
@@ -793,7 +929,6 @@ export class WorkshopsService implements OnModuleInit {
   }
 
   async findAllAdmin(params: {
-
     page?: number;
     limit?: number;
     status?: WorkshopStatus;
@@ -825,7 +960,6 @@ export class WorkshopsService implements OnModuleInit {
     };
   }
 
-
   async queueAiSummary(workshopId: string, pdfBuffer: Buffer) {
     this.logger.log(`Queueing AI summary job for workshop: ${workshopId}`);
 
@@ -843,6 +977,12 @@ export class WorkshopsService implements OnModuleInit {
         ),
       ])) as { id: string } | null;
 
+      // Set aiSummary to null to trigger frontend polling
+      await this.prisma.workshop.update({
+        where: { id: workshopId },
+        data: { aiSummary: null },
+      });
+
       return {
         jobId: job?.id,
         message: 'PDF uploaded and summary job queued.',
@@ -855,5 +995,50 @@ export class WorkshopsService implements OnModuleInit {
         message: 'Failed to queue job. Check if Redis is running.',
       };
     }
+  }
+
+  async mockQrPayment(workshopId: string, userId: string) {
+    this.logger.log(`Mocking QR payment for user ${userId}, workshop ${workshopId}`);
+    
+    const registration = await this.prisma.workshopRegistration.findFirst({
+      where: {
+        workshopId,
+        userId,
+        status: RegistrationStatus.PENDING,
+      },
+      include: {
+        workshop: true,
+        user: true,
+      }
+    });
+
+    if (!registration) {
+      // Check if already confirmed
+      const confirmed = await this.prisma.workshopRegistration.findFirst({
+        where: { workshopId, userId, status: RegistrationStatus.CONFIRMED }
+      });
+      if (confirmed) {
+        return { success: true, message: 'Registration already confirmed' };
+      }
+      throw new NotFoundException('Pending registration not found');
+    }
+
+    // Update to CONFIRMED
+    const updated = await this.prisma.workshopRegistration.update({
+      where: { id: registration.id },
+      data: { status: RegistrationStatus.CONFIRMED },
+    });
+
+    // Send notification
+    try {
+      await this.notificationsService.send(registration.user.email, {
+        subject: `Registration Confirmed: ${registration.workshop.title}`,
+        body: `You have successfully registered for the workshop "${registration.workshop.title}" at ${registration.workshop.room}. Time: ${registration.workshop.startTime.toLocaleString()}.`,
+      });
+    } catch (err) {
+      this.logger.error(`Failed to send notification for mock payment: ${err.message}`);
+    }
+
+    return { success: true, message: 'Payment confirmed via QR scan simulation' };
   }
 }

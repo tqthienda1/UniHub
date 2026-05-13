@@ -22,10 +22,12 @@ import { APP_GUARD } from '@nestjs/core';
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
       },
     }),
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 10, // Giới hạn 10 request / 60 giây để dễ dàng demo lỗi 429
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100, // Đã tăng lên 100 để không bị block khi chuyển tab
+      },
+    ]),
     WorkshopsModule,
     PrismaModule,
     UsersModule,
