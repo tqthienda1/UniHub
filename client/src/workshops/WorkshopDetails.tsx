@@ -34,19 +34,34 @@ const decodeToken = (token: string) => {
 const WorkshopDetails = () => {
   const { id: workshopId } = useParams<{ id: string }>();
   const [workshop, setWorkshop] = useState<Workshop | null>(null);
+  const [registration, setRegistration] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<string>('15:00');
+  const [now, setNow] = useState(new Date());
   const { showNotification } = useNotification();
 
   const fetchWorkshop = async () => {
     try {
-      const response = await fetch(`http://localhost:3000/workshops/${workshopId}`);
-      if (response.ok) {
-        const data = await response.json();
+      const workshopRes = await fetch(`http://localhost:3000/workshops/${workshopId}`);
+      if (workshopRes.ok) {
+        const data = await workshopRes.json();
         setWorkshop(data);
       }
+
+      const token = localStorage.getItem('token');
+      if (token) {
+        const regRes = await fetch(`http://localhost:3000/registrations/${workshopId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (regRes.ok) {
+          const regData = await regRes.json();
+          setRegistration(regData);
+        }
+      }
     } catch (error) {
-      console.error('Failed to fetch workshop', error);
+      console.error('Failed to fetch data', error);
     } finally {
       setLoading(false);
     }
@@ -64,7 +79,11 @@ const WorkshopDetails = () => {
     return () => clearInterval(interval);
   }, [workshopId, workshop?.aiSummary]);
 
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  // Tick every second to update timers
+  useEffect(() => {
+    const ticker = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(ticker);
+  }, []);
 
   // Poll for registration status when payment modal is open
   useEffect(() => {
@@ -91,6 +110,30 @@ const WorkshopDetails = () => {
     }
     return () => clearInterval(interval);
   }, [showPaymentModal, workshop]);
+
+  // Countdown timer for pending registrations
+  useEffect(() => {
+    let timer: any;
+    if (showPaymentModal && registration && registration.status === 'PENDING') {
+      const updateTimer = () => {
+        const expiresAt = new Date(new Date(registration.createdAt).getTime() + 15 * 60 * 1000);
+        const diff = expiresAt.getTime() - now.getTime();
+        
+        if (diff <= 0) {
+          setTimeLeft('00:00');
+          setShowPaymentModal(false);
+          fetchWorkshop();
+          showNotification('Reservation expired', 'error');
+        } else {
+          const mins = Math.floor(diff / 60000);
+          const secs = Math.floor((diff % 60000) / 1000);
+          setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        }
+      };
+      
+      updateTimer();
+    }
+  }, [showPaymentModal, registration, now]);
 
   if (loading) return (
     <div className="max-w-5xl mx-auto mt-10 p-8 space-y-8 animate-pulse">
@@ -128,6 +171,25 @@ const WorkshopDetails = () => {
   } => {
     const now = new Date();
     const startTime = new Date(workshop.startTime);
+
+    if (registration) {
+      if (registration.status === 'CONFIRMED' || registration.status === 'CHECKED_IN') {
+        return { canRegister: false, buttonText: '✓ Registered', buttonClass: 'bg-emerald-500 cursor-default' };
+      }
+      if (registration.status === 'PENDING') {
+        const expiresAt = new Date(new Date(registration.createdAt).getTime() + 15 * 60 * 1000);
+        const diff = expiresAt.getTime() - now.getTime();
+        const mins = Math.max(0, Math.floor(diff / 60000));
+        const secs = Math.max(0, Math.floor((diff % 60000) / 1000));
+        const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+        return { 
+          canRegister: true, 
+          buttonText: `⏳ Payment Pending — ${timeStr} left`, 
+          buttonClass: 'bg-amber-500 hover:bg-amber-600' 
+        };
+      }
+    }
 
     if (startTime < now) {
       return { canRegister: false, buttonText: 'Workshop Ended', buttonClass: 'bg-gray-400 cursor-not-allowed' };
@@ -167,6 +229,8 @@ const WorkshopDetails = () => {
         console.log('Registration data:', data);
         if (data.status === 'PENDING') {
           console.log('Setting showPaymentModal to true');
+          setRegistration(data);
+          fetchWorkshop();
           setShowPaymentModal(true);
         } else {
           showNotification('Registered successfully!', 'success');
@@ -188,7 +252,39 @@ const WorkshopDetails = () => {
   const handleRegisterClick = () => {
     console.log('Register button clicked');
     if (!workshop) return;
+    
+    if (registration && registration.status === 'PENDING') {
+      setShowPaymentModal(true);
+      return;
+    }
+    
     executeRegistration();
+  };
+
+  const handleCancelRegistration = async () => {
+    if (!registration) return;
+    if (!window.confirm('Are you sure you want to cancel your registration?')) return;
+    
+    setRegistering(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3000/registrations/${registration.id}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.ok) {
+        showNotification('Registration cancelled', 'success');
+        fetchWorkshop();
+      } else {
+        const error = await response.json();
+        showNotification(error.message || 'Cancellation failed', 'error');
+      }
+    } catch (error) {
+      console.error('Cancellation failed', error);
+      showNotification('Connection error during cancellation', 'error');
+    } finally {
+      setRegistering(false);
+    }
   };
 
   // Get User ID for QR code
@@ -349,13 +445,23 @@ const WorkshopDetails = () => {
               </button>
             );
           })()}
+
+          {registration && (registration.status === 'PENDING' || registration.status === 'CONFIRMED') && (
+            <button
+              onClick={handleCancelRegistration}
+              disabled={registering}
+              className="w-full mt-4 bg-white text-rose-500 border-2 border-rose-100 hover:bg-rose-50 hover:border-rose-200 py-4 rounded-3xl font-bold transition-all disabled:opacity-50"
+            >
+              Cancel Registration
+            </button>
+          )}
         </div>
       </div>
 
       {/* Mock Payment Modal (QR Code) */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in slide-in-from-bottom-8 duration-500">
+          <div className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-[2rem] shadow-2xl animate-in zoom-in slide-in-from-bottom-8 duration-500 scrollbar-hide">
             <div className="p-8">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-black text-gray-900 tracking-tight">Payment QR</h2>
@@ -375,8 +481,13 @@ const WorkshopDetails = () => {
                 </div>
                 
                 <div className="text-center space-y-2">
-                  <p className="text-sm font-bold text-gray-600">Scan this QR with your phone to pay</p>
-                  <p className="text-xs text-gray-400 italic">Waiting for scan confirmation...</p>
+                  <div className="flex items-center justify-center space-x-2 text-rose-500 font-black text-lg">
+                    <svg className="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Seat expires in: {timeLeft}</span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-600 italic">Scan QR to complete registration</p>
                 </div>
 
                 <div className="w-full flex items-center justify-center space-x-2 py-2">

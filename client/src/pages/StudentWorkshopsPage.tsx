@@ -31,6 +31,7 @@ const decodeToken = (token: string) => {
 
 const StudentWorkshopsPage = () => {
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
+  const [registrations, setRegistrations] = useState<any[]>([]); // New state
   const [myRegistrations, setMyRegistrations] = useState<string[]>([]);
   const [myPendingRegistrations, setMyPendingRegistrations] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +40,7 @@ const StudentWorkshopsPage = () => {
   const [selectedWorkshopForPayment, setSelectedWorkshopForPayment] = useState<Workshop | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [now, setNow] = useState(new Date());
   const { showNotification } = useNotification();
 
   const fetchData = async (signal?: AbortSignal) => {
@@ -72,8 +74,9 @@ const StudentWorkshopsPage = () => {
       if (registrationsRes.ok) {
         const regs = await registrationsRes.json();
         if (signal?.aborted) return;
+        setRegistrations(regs); // Save full objects
         const activeRegs = regs
-          .filter((r: any) => r.status !== 'CANCELLED' && r.status !== 'EXPIRED')
+          .filter((r: any) => r.status === 'CONFIRMED' || r.status === 'CHECKED_IN')
           .map((r: any) => r.workshopId);
         const pendingRegs = regs
           .filter((r: any) => r.status === 'PENDING')
@@ -98,6 +101,12 @@ const StudentWorkshopsPage = () => {
     };
   }, []);
 
+  // Tick every second to update timers
+  useEffect(() => {
+    const ticker = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(ticker);
+  }, []);
+
   const handleRegister = async (id: string) => {
     setRegisteringId(id);
     try {
@@ -116,6 +125,7 @@ const StudentWorkshopsPage = () => {
           if (ws) {
             setSelectedWorkshopForPayment(ws);
             setShowPaymentModal(true);
+            void fetchData();
           }
         } else {
           showNotification('Registered successfully!', 'success');
@@ -352,7 +362,16 @@ const StudentWorkshopsPage = () => {
                     disabled = true; label = '✓ Registered';
                     cls = 'bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-none cursor-default';
                   } else if (isPending) {
-                    label = '⏳ Payment Pending — Tap to Retry';
+                    const reg = registrations.find((r: any) => r.workshopId === workshop.id);
+                    let timeStr = '';
+                    if (reg) {
+                      const expiresAt = new Date(new Date(reg.createdAt).getTime() + 15 * 60 * 1000);
+                      const diff = expiresAt.getTime() - now.getTime();
+                      const mins = Math.max(0, Math.floor(diff / 60000));
+                      const secs = Math.max(0, Math.floor((diff % 60000) / 1000));
+                      timeStr = ` — ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} left`;
+                    }
+                    label = `⏳ Payment Pending${timeStr}`;
                     cls = 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 shadow-amber-100';
                   } else if (isProcessing) {
                     disabled = true; label = 'Processing...';
@@ -446,7 +465,7 @@ const StudentWorkshopsPage = () => {
       {/* Mock Payment Modal (QR Code) */}
       {showPaymentModal && selectedWorkshopForPayment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in slide-in-from-bottom-8 duration-500">
+          <div className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-[2rem] shadow-2xl animate-in zoom-in slide-in-from-bottom-8 duration-500 scrollbar-hide">
             <div className="p-8">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-black text-gray-900 tracking-tight">Payment QR</h2>
@@ -456,7 +475,7 @@ const StudentWorkshopsPage = () => {
               </div>
 
               <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mb-6 flex justify-between items-center">
-                <span className="text-sm font-bold text-indigo-900">Amount to Pay</span>
+                <span className="text-sm font-bold text-indigo-900">Workshop Fee</span>
                 <span className="text-xl font-black text-indigo-600">{Number(selectedWorkshopForPayment.price).toLocaleString()}đ</span>
               </div>
 
@@ -469,8 +488,21 @@ const StudentWorkshopsPage = () => {
                 </div>
                 
                 <div className="text-center space-y-2">
-                  <p className="text-sm font-bold text-gray-600">Scan this QR with your phone to pay</p>
-                  <p className="text-xs text-gray-400 italic">Waiting for scan confirmation...</p>
+                  <div className="flex items-center justify-center space-x-2 text-rose-500 font-black text-lg">
+                    <svg className="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Seat expires in: {(() => {
+                      const reg = registrations.find((r: any) => r.workshopId === selectedWorkshopForPayment.id);
+                      if (!reg) return '15:00';
+                      const expiresAt = new Date(new Date(reg.createdAt).getTime() + 15 * 60 * 1000);
+                      const diff = expiresAt.getTime() - now.getTime();
+                      const mins = Math.max(0, Math.floor(diff / 60000));
+                      const secs = Math.max(0, Math.floor((diff % 60000) / 1000));
+                      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    })()}</span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-600 italic">Scan QR to complete registration</p>
                 </div>
 
                 <div className="w-full flex items-center justify-center space-x-2 py-2">
@@ -479,7 +511,6 @@ const StudentWorkshopsPage = () => {
                   <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                 </div>
 
-                {/* Secret simulation button */}
                 <button
                   onClick={() => window.open(`http://192.168.1.169:3000/registrations/mock-payment/scan?workshopId=${selectedWorkshopForPayment.id}&userId=${userId}`, '_blank')}
                   className="text-[10px] text-gray-300 hover:text-indigo-400 transition-colors uppercase tracking-tighter"
