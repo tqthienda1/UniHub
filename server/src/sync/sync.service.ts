@@ -20,7 +20,9 @@ export class SyncService {
     }
 
     this.isSyncing = true;
-    const csvPath = path.resolve(process.env.STUDENT_DATA_CSV_PATH || 'data/students.csv');
+    const csvPath = path.resolve(
+      process.env.STUDENT_DATA_CSV_PATH || 'data/students.csv',
+    );
 
     try {
       if (!fs.existsSync(csvPath)) {
@@ -41,14 +43,21 @@ export class SyncService {
       // Validate headers
       const firstLine = await this.readFirstLine(csvPath);
       const requiredHeaders = ['mssv', 'email', 'fullName'];
-      const headers = firstLine.split(',').map((h) => h.trim().replace(/^"|"$/g, ''));
-      const missingHeaders = requiredHeaders.filter((h) => !headers.includes(h));
+      const headers = firstLine
+        .split(',')
+        .map((h) => h.trim().replace(/^"|"$/g, ''));
+      const missingHeaders = requiredHeaders.filter(
+        (h) => !headers.includes(h),
+      );
 
       if (missingHeaders.length > 0) {
         const msg = `CSV file is missing required headers: ${missingHeaders.join(', ')}`;
         this.logger.error(msg);
         await this.sendAlert(msg);
-        await this.moveFile(csvPath, process.env.STUDENT_DATA_FAILED_PATH || 'data/failed');
+        await this.moveFile(
+          csvPath,
+          process.env.STUDENT_DATA_FAILED_PATH || 'data/failed',
+        );
         return;
       }
 
@@ -74,7 +83,9 @@ export class SyncService {
         const { mssv, email, fullName } = record;
 
         if (!mssv || !email || !fullName) {
-          this.logger.error(`Row ${count}: Missing required fields. MSSV: ${mssv}, Email: ${email}, Name: ${fullName}`);
+          this.logger.error(
+            `Row ${count}: Missing required fields. MSSV: ${mssv}, Email: ${email}, Name: ${fullName}`,
+          );
           errorCount++;
           continue;
         }
@@ -106,12 +117,22 @@ export class SyncService {
       this.logger.log(
         `Sync complete. Total processed: ${count}, Created: ${createdCount}, Updated: ${updatedCount}, Errors: ${errorCount}`,
       );
-      await this.moveFile(csvPath, process.env.STUDENT_DATA_ARCHIVE_PATH || 'data/archive');
+      await this.moveFile(
+        csvPath,
+        process.env.STUDENT_DATA_ARCHIVE_PATH || 'data/archive',
+      );
     } catch (error) {
-      this.logger.error(`Unexpected error during sync: ${error.message}`);
-      await this.sendAlert(`Fatal error during student data sync: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(`Unexpected error during sync: ${errorMessage}`);
+      await this.sendAlert(
+        `Fatal error during student data sync: ${errorMessage}`,
+      );
       if (fs.existsSync(csvPath)) {
-        await this.moveFile(csvPath, process.env.STUDENT_DATA_FAILED_PATH || 'data/failed');
+        await this.moveFile(
+          csvPath,
+          process.env.STUDENT_DATA_FAILED_PATH || 'data/failed',
+        );
       }
     } finally {
       this.isSyncing = false;
@@ -141,7 +162,11 @@ export class SyncService {
       fs.renameSync(sourcePath, destPath);
       this.logger.log(`Moved file ${fileName} to ${destDir}`);
     } catch (error) {
-      this.logger.error(`Failed to move file ${fileName} to ${destDir}: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Failed to move file ${fileName} to ${destDir}: ${errorMessage}`,
+      );
     }
   }
 
@@ -176,7 +201,9 @@ export class SyncService {
         });
         created += result.count;
       } catch (error) {
-        this.logger.error(`Batch insert error: ${error.message}`);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        this.logger.error(`Batch insert error: ${errorMessage}`);
         errors += toCreate.length;
       }
     }
@@ -192,7 +219,11 @@ export class SyncService {
         });
         updated++;
       } catch (error) {
-        this.logger.error(`Error updating record ${record.mssv}: ${error.message}`);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        this.logger.error(
+          `Error updating record ${record.mssv}: ${errorMessage}`,
+        );
         errors++;
       }
     }
