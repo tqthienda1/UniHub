@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useNotification } from '../context/NotificationContext';
 import ConfirmModal from '../components/ConfirmModal';
 import QrModal from '../components/QrModal';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface Registration {
   id: string;
@@ -14,6 +15,7 @@ interface Registration {
     title: string;
     room: string;
     startTime: string;
+    price: number;
     aiSummary?: string | null;
   };
 }
@@ -23,33 +25,103 @@ const MyRegistrationsPage = () => {
   const [loading, setLoading] = useState(true);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [selectedReg, setSelectedReg] = useState<Registration | null>(null);
+  const [timeLeft, setTimeLeft] = useState<string>('15:00');
+  const [now, setNow] = useState(new Date());
+  const [search, setSearch] = useState('');
   const { showNotification } = useNotification();
 
-  const fetchRegistrations = async () => {
+  const fetchRegistrations = async (signal?: AbortSignal) => {
+    setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:3000/registrations/me', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
+        signal,
       });
+      if (signal?.aborted) return;
       if (response.ok) {
         const data = await response.json();
-        setRegistrations(data);
+        if (!signal?.aborted) setRegistrations(data);
       }
-    } catch (error) {
-      console.error('Failed to fetch registrations', error);
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
+      console.error('Failed to fetch registrations', err);
       showNotification('Could not load registrations', 'error');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRegistrations();
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      void fetchRegistrations(controller.signal);
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, []);
+
+  // Tick every second to update timers
+  useEffect(() => {
+    const ticker = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(ticker);
+  }, []);
+
+  // Poll for status when payment modal is open
+  useEffect(() => {
+    let interval: any;
+    if (isPaymentModalOpen && selectedReg) {
+      interval = setInterval(async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await fetch(`http://localhost:3000/registrations/${selectedReg.workshopId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.status === 'CONFIRMED') {
+              showNotification('Payment confirmed!', 'success');
+              setIsPaymentModalOpen(false);
+              setSelectedReg(null);
+              fetchRegistrations();
+            }
+          }
+        } catch (e) {
+          console.error('Polling failed', e);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [isPaymentModalOpen, selectedReg]);
+
+  // Countdown timer for pending registrations
+  useEffect(() => {
+    let timer: any;
+    if (isPaymentModalOpen && selectedReg && selectedReg.status === 'PENDING') {
+      const updateTimer = () => {
+        const expiresAt = new Date(new Date(selectedReg.createdAt).getTime() + 15 * 60 * 1000);
+        const diff = expiresAt.getTime() - now.getTime();
+        
+        if (diff <= 0) {
+          setTimeLeft('00:00');
+          setIsPaymentModalOpen(false);
+          fetchRegistrations();
+          showNotification('Reservation expired', 'error');
+        } else {
+          const mins = Math.floor(diff / 60000);
+          const secs = Math.floor((diff % 60000) / 1000);
+          setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        }
+      };
+      
+      updateTimer();
+    }
+  }, [isPaymentModalOpen, selectedReg, now]);
 
   const initiateCancel = (reg: Registration) => {
     setSelectedReg(reg);
@@ -66,22 +138,28 @@ const MyRegistrationsPage = () => {
     setIsSummaryModalOpen(true);
   };
 
+  const initiatePayment = (reg: Registration) => {
+    setSelectedReg(reg);
+    setIsPaymentModalOpen(true);
+  };
+
   const handleCancel = async () => {
     if (!selectedReg) return;
-
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/registrations/${selectedReg.id}/cancel`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
+      const response = await fetch(
+        `http://localhost:3000/registrations/${selectedReg.id}/cancel`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
         },
-      });
-      
+      );
       if (response.ok) {
         showNotification('Registration cancelled successfully', 'success');
-        fetchRegistrations();
+        void fetchRegistrations();
       } else {
         const error = await response.json();
         showNotification(error.message || 'Cancellation failed', 'error');
@@ -95,40 +173,99 @@ const MyRegistrationsPage = () => {
     }
   };
 
-  // Filter out cancelled registrations for the main active list
-  const activeRegistrations = registrations.filter(reg => reg.status !== 'CANCELLED');
+  // Filter: exclude cancelled, then apply search
+  const activeRegistrations = useMemo(() => {
+    const active = registrations.filter((r) => r.status !== 'CANCELLED');
+    const q = search.trim().toLowerCase();
+    if (!q) return active;
+    return active.filter(
+      (r) =>
+        r.workshop.title.toLowerCase().includes(q) ||
+        r.workshop.room.toLowerCase().includes(q) ||
+        r.status.toLowerCase().includes(q),
+    );
+  }, [registrations, search]);
 
   return (
-    <div className="space-y-12 animate-in fade-in duration-700">
-      <div className="max-w-3xl">
-        <h1 className="text-4xl font-black text-gray-900 tracking-tight sm:text-5xl">
-          My <span className="text-indigo-600">Registrations</span>
-        </h1>
-        <p className="text-gray-500 mt-4 text-lg font-medium">
-          Manage your active workshops and access your check-in passes.
-        </p>
+    <div className="space-y-8 animate-in fade-in duration-700">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight sm:text-5xl">
+            My <span className="text-indigo-600">Registrations</span>
+          </h1>
+          <p className="text-gray-500 mt-2 text-lg font-medium">
+            Manage your active workshops and access your check-in passes.
+          </p>
+        </div>
+        {!loading && (
+          <p className="text-sm font-bold text-gray-400 shrink-0">
+            {activeRegistrations.length} registration{activeRegistrations.length !== 1 ? 's' : ''}
+          </p>
+        )}
       </div>
 
+      {/* Search */}
+      {!loading && registrations.filter((r) => r.status !== 'CANCELLED').length > 0 && (
+        <div className="relative">
+          <svg
+            className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+              d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search by workshop title, room, or status…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-12 pr-10 py-3.5 bg-white border border-gray-200 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm font-medium text-gray-700 placeholder-gray-400 transition-all"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Table card */}
       <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-indigo-100/50 border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="p-20 text-center">
-            <div className="inline-block w-8 h-8 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
-            <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Syncing your records...</p>
+            <div className="inline-block w-8 h-8 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-4" />
+            <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">
+              Syncing your records...
+            </p>
           </div>
         ) : activeRegistrations.length === 0 ? (
           <div className="p-24 text-center">
             <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto mb-8">
               <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
             </div>
-            <p className="text-gray-400 font-black text-xl mb-8 uppercase tracking-tight">No active registrations found</p>
-            <Link to="/" className="inline-flex items-center px-10 py-5 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all active:scale-95 shadow-xl shadow-indigo-200">
-              Find Workshops
-              <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-              </svg>
-            </Link>
+            <p className="text-gray-400 font-black text-xl mb-8 uppercase tracking-tight">
+              {search ? `No registrations match "${search}"` : 'No active registrations found'}
+            </p>
+            {!search && (
+              <Link
+                to="/"
+                className="inline-flex items-center px-10 py-5 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all active:scale-95 shadow-xl shadow-indigo-200"
+              >
+                Find Workshops
+                <svg className="ml-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </Link>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -146,9 +283,11 @@ const MyRegistrationsPage = () => {
                 {activeRegistrations.map((reg) => (
                   <tr key={reg.id} className="group hover:bg-indigo-50/30 transition-all duration-300">
                     <td className="px-10 py-8">
-                      <div className="font-black text-gray-900 text-lg mb-1 group-hover:text-indigo-600 transition-colors">{reg.workshop.title}</div>
+                      <div className="font-black text-gray-900 text-base mb-1 group-hover:text-indigo-600 transition-colors leading-snug">
+                        {reg.workshop.title}
+                      </div>
                       <div className="flex items-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3 h-3 mr-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
@@ -157,20 +296,42 @@ const MyRegistrationsPage = () => {
                     </td>
                     <td className="px-10 py-8">
                       <div className="text-sm text-gray-700 font-black tracking-tight">
-                        {new Date(reg.workshop.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {new Date(reg.workshop.startTime).toLocaleDateString('vi-VN')}
                       </div>
                       <div className="text-xs text-gray-400 font-bold">
-                        {new Date(reg.workshop.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(reg.workshop.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </td>
                     <td className="px-10 py-8">
-                      <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] shadow-sm
-                        ${reg.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 
-                          reg.status === 'CHECKED_IN' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 
-                          'bg-gray-100 text-gray-500'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full mr-2 ${reg.status === 'CONFIRMED' ? 'bg-emerald-500' : reg.status === 'CHECKED_IN' ? 'bg-indigo-500' : 'bg-gray-400'}`}></span>
-                        {reg.status}
-                      </span>
+                      {reg.status === 'PENDING' ? (
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] shadow-sm bg-amber-100 text-amber-700 border border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full mr-2 bg-amber-500" />
+                            Waiting for Payment
+                          </span>
+                          <span className="text-[10px] font-black text-rose-500 animate-pulse ml-1">
+                            Expires in: {(() => {
+                              const expiresAt = new Date(new Date(reg.createdAt).getTime() + 15 * 60 * 1000);
+                              const diff = expiresAt.getTime() - now.getTime();
+                              if (diff <= 0) return '00:00';
+                              const mins = Math.max(0, Math.floor(diff / 60000));
+                              const secs = Math.max(0, Math.floor((diff % 60000) / 1000));
+                              return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                            })()}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] shadow-sm
+                          ${reg.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                            reg.status === 'CHECKED_IN' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' :
+                            'bg-gray-100 text-gray-500'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-2 ${
+                            reg.status === 'CONFIRMED' ? 'bg-emerald-500' : 
+                            reg.status === 'CHECKED_IN' ? 'bg-indigo-500' : 
+                            'bg-gray-400'}`} />
+                          {reg.status}
+                        </span>
+                      )}
                     </td>
                     <td className="px-10 py-8">
                       {reg.workshop.aiSummary ? (
@@ -178,7 +339,7 @@ const MyRegistrationsPage = () => {
                           onClick={() => showSummary(reg)}
                           className="px-4 py-2 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-100 transition-all active:scale-95 border border-indigo-100"
                         >
-                          View Introduce
+                          View Intro
                         </button>
                       ) : (
                         <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">N/A</span>
@@ -186,6 +347,22 @@ const MyRegistrationsPage = () => {
                     </td>
                     <td className="px-10 py-8 text-right">
                       <div className="flex items-center justify-end space-x-4">
+                        {reg.status === 'PENDING' && (
+                          <>
+                            <button
+                              onClick={() => initiatePayment(reg)}
+                              className="px-4 py-2 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-amber-600 transition-all active:scale-95 shadow-lg shadow-amber-200"
+                            >
+                              Pay Now
+                            </button>
+                            <button
+                              onClick={() => initiateCancel(reg)}
+                              className="text-[10px] font-black text-rose-500 hover:text-rose-600 uppercase tracking-[0.2em] transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
                         {reg.status === 'CONFIRMED' && (
                           <>
                             <button
@@ -194,12 +371,14 @@ const MyRegistrationsPage = () => {
                             >
                               View QR
                             </button>
-                            <button
-                              onClick={() => initiateCancel(reg)}
-                              className="text-[10px] font-black text-rose-500 hover:text-rose-600 uppercase tracking-[0.2em] transition-colors"
-                            >
-                              Cancel
-                            </button>
+                            {new Date(reg.workshop.startTime) > new Date() && (
+                              <button
+                                onClick={() => initiateCancel(reg)}
+                                className="text-[10px] font-black text-rose-500 hover:text-rose-600 uppercase tracking-[0.2em] transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            )}
                           </>
                         )}
                         {reg.status === 'CHECKED_IN' && (
@@ -237,17 +416,68 @@ const MyRegistrationsPage = () => {
         workshopTitle={selectedReg?.workshop.title || ''}
       />
 
-      {/* Summary Modal */}
+      {isPaymentModalOpen && selectedReg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md max-h-[90vh] overflow-y-auto rounded-[2rem] shadow-2xl animate-in zoom-in slide-in-from-bottom-8 duration-500 scrollbar-hide">
+            <div className="p-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-black text-gray-900 tracking-tight">Payment QR</h2>
+                <button onClick={() => setIsPaymentModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mb-6 flex justify-between items-center">
+                <span className="text-sm font-bold text-indigo-900">Workshop Fee</span>
+                <span className="text-xl font-black text-indigo-600">{Number(selectedReg.workshop.price).toLocaleString()}đ</span>
+              </div>
+
+              <div className="flex flex-col items-center justify-center space-y-6 py-4">
+                <div className="p-6 bg-white border-4 border-indigo-600 rounded-3xl shadow-xl">
+                  <QRCodeSVG 
+                    value={`http://192.168.1.169:3000/registrations/mock-payment/scan?workshopId=${selectedReg.workshopId}&userId=${JSON.parse(window.atob(localStorage.getItem('token')!.split('.')[1])).sub}`} 
+                    size={200} 
+                  />
+                </div>
+                
+                <div className="text-center space-y-2">
+                  <div className="flex items-center justify-center space-x-2 text-rose-500 font-black text-lg">
+                    <svg className="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Seat expires in: {timeLeft}</span>
+                  </div>
+                  <p className="text-sm font-bold text-gray-600 italic">Scan QR to complete registration</p>
+                </div>
+
+                <div className="w-full flex items-center justify-center space-x-2 py-2">
+                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                </div>
+
+                <button
+                  onClick={() => window.open(`http://192.168.1.169:3000/registrations/mock-payment/scan?workshopId=${selectedReg.workshopId}&userId=${JSON.parse(window.atob(localStorage.getItem('token')!.split('.')[1])).sub}`, '_blank')}
+                  className="text-[10px] text-gray-300 hover:text-indigo-400 transition-colors uppercase tracking-tighter"
+                >
+                  (Mock Scan on Web)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isSummaryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in slide-in-from-bottom-8 duration-500">
             <div className="p-10 space-y-8">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="text-2xl font-black text-gray-900 tracking-tight leading-tight mb-2">Workshop Introduce</h3>
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight leading-tight mb-2">Workshop Intro</h3>
                   <p className="text-indigo-600 font-bold text-sm uppercase tracking-widest">{selectedReg?.workshop.title}</p>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsSummaryModalOpen(false)}
                   className="p-2 hover:bg-gray-100 rounded-2xl transition-colors"
                 >
@@ -256,18 +486,16 @@ const MyRegistrationsPage = () => {
                   </svg>
                 </button>
               </div>
-
-              <div className="p-8 rounded-[2rem] bg-indigo-50/50 border border-indigo-100 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-400/5 rounded-full -mr-12 -mt-12 blur-xl"></div>
+              <div className="p-8 rounded-[2rem] bg-indigo-50/50 border border-indigo-100 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-400/5 rounded-full -mr-12 -mt-12 blur-xl" />
                 <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-4 flex items-center">
-                  <span className="w-6 h-[2px] bg-indigo-200 mr-2"></span>
+                  <span className="w-6 h-[2px] bg-indigo-200 mr-2" />
                   AI Generated Summary
                 </h4>
                 <p className="text-gray-700 text-base font-medium leading-relaxed italic">
                   "{selectedReg?.workshop.aiSummary}"
                 </p>
               </div>
-
               <button
                 onClick={() => setIsSummaryModalOpen(false)}
                 className="w-full py-5 bg-gray-900 text-white font-black rounded-2xl shadow-xl shadow-gray-200 hover:bg-gray-800 transition-all active:scale-95 uppercase tracking-widest text-xs"
@@ -282,6 +510,4 @@ const MyRegistrationsPage = () => {
   );
 };
 
-
 export default MyRegistrationsPage;
-

@@ -7,8 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { Calendar, MapPin, Users, Info, ChevronLeft } from 'lucide-react-native';
+import { Calendar, MapPin, Users, Info, ChevronLeft, CreditCard, X } from 'lucide-react-native';
 import apiClient from '../api/client';
 import { getSocket } from '../api/socket';
 
@@ -17,6 +21,8 @@ const WorkshopDetailScreen = ({ route, navigation }: any) => {
   const [workshop, setWorkshop] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentData, setPaymentData] = useState({ card: '', expiry: '', cvv: '', name: '' });
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -52,12 +58,15 @@ const WorkshopDetailScreen = ({ route, navigation }: any) => {
     };
   }, [id]);
 
-  const handleRegister = async () => {
+  const executeRegistration = async () => {
     setRegistering(true);
     try {
       await apiClient.post(`/registrations/${id}`);
       Alert.alert('Success', 'Registered successfully!', [
-        { text: 'OK', onPress: () => navigation.navigate('MyRegistrations') }
+        { text: 'OK', onPress: () => {
+          setShowPaymentModal(false);
+          navigation.navigate('MyRegistrations');
+        } }
       ]);
     } catch (error: any) {
       const message = error.response?.data?.message || 'Registration failed';
@@ -65,6 +74,39 @@ const WorkshopDetailScreen = ({ route, navigation }: any) => {
     } finally {
       setRegistering(false);
     }
+  };
+
+  const handleRegisterClick = () => {
+    if (workshop.price > 0) {
+      setShowPaymentModal(true);
+    } else {
+      executeRegistration();
+    }
+  };
+
+  const handlePaymentSubmit = () => {
+    if (paymentData.card.length < 16) {
+      Alert.alert('Validation Error', 'Card number must be at least 16 digits.');
+      return;
+    }
+    if (!paymentData.expiry.includes('/')) {
+      Alert.alert('Validation Error', 'Expiry must be in MM/YY format.');
+      return;
+    }
+    if (paymentData.cvv.length < 3) {
+      Alert.alert('Validation Error', 'CVV must be at least 3 digits.');
+      return;
+    }
+    if (!paymentData.name) {
+      Alert.alert('Validation Error', 'Please enter cardholder name.');
+      return;
+    }
+
+    setRegistering(true);
+    // Fake processing delay
+    setTimeout(() => {
+      executeRegistration();
+    }, 2000);
   };
 
   if (loading) {
@@ -154,7 +196,7 @@ const WorkshopDetailScreen = ({ route, navigation }: any) => {
             styles.registerButton,
             (workshop.availableSeats === 0 || registering) && styles.disabledButton
           ]}
-          onPress={handleRegister}
+          onPress={handleRegisterClick}
           disabled={workshop.availableSeats === 0 || registering}
         >
           {registering ? (
@@ -166,6 +208,106 @@ const WorkshopDetailScreen = ({ route, navigation }: any) => {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Mock Payment Modal */}
+      <Modal
+        visible={showPaymentModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => !registering && setShowPaymentModal(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <CreditCard size={24} color="#3b82f6" />
+                <Text style={styles.modalTitle}>Payment Details</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setShowPaymentModal(false)}
+                disabled={registering}
+              >
+                <X size={24} color="#9ca3af" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.amountBox}>
+              <Text style={styles.amountLabel}>Total Amount</Text>
+              <Text style={styles.amountValue}>{workshop?.price?.toLocaleString()}đ</Text>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>CARD NUMBER (MOCK)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0000 0000 0000 0000"
+                keyboardType="numeric"
+                maxLength={19}
+                value={paymentData.card}
+                onChangeText={(text) => setPaymentData({...paymentData, card: text})}
+                editable={!registering}
+              />
+            </View>
+
+            <View style={styles.rowInputs}>
+              <View style={[styles.formGroup, { flex: 1, marginRight: 10 }]}>
+                <Text style={styles.inputLabel}>EXPIRY</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="MM/YY"
+                  maxLength={5}
+                  value={paymentData.expiry}
+                  onChangeText={(text) => setPaymentData({...paymentData, expiry: text})}
+                  editable={!registering}
+                />
+              </View>
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={styles.inputLabel}>CVV</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="123"
+                  keyboardType="numeric"
+                  maxLength={4}
+                  secureTextEntry
+                  value={paymentData.cvv}
+                  onChangeText={(text) => setPaymentData({...paymentData, cvv: text})}
+                  editable={!registering}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>CARDHOLDER NAME</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="NGUYEN VAN A"
+                autoCapitalize="characters"
+                value={paymentData.name}
+                onChangeText={(text) => setPaymentData({...paymentData, name: text})}
+                editable={!registering}
+              />
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.payButton, registering && styles.disabledButton]}
+              onPress={handlePaymentSubmit}
+              disabled={registering}
+            >
+              {registering ? (
+                <View style={styles.payProcessingRow}>
+                  <ActivityIndicator color="#fff" size="small" />
+                  <Text style={styles.payButtonText}>Verifying...</Text>
+                </View>
+              ) : (
+                <Text style={styles.payButtonText}>Pay Now</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
@@ -290,6 +432,100 @@ const styles = StyleSheet.create({
   registerButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingBottom: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  amountBox: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  amountLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1e3a8a',
+  },
+  amountValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#2563eb',
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  rowInputs: {
+    flexDirection: 'row',
+  },
+  inputLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#6b7280',
+    marginBottom: 6,
+    marginLeft: 4,
+  },
+  input: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    color: '#1f2937',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  payButton: {
+    backgroundColor: '#2563eb',
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  payProcessingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  payButtonText: {
+    color: '#fff',
+    fontSize: 18,
     fontWeight: '700',
   },
 });

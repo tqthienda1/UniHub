@@ -10,11 +10,18 @@ export class PaymentService {
    * @param idempotencyKey Key to prevent double charging
    * @param shouldTimeout For testing: force timeout
    */
-  async processPayment(amount: number, idempotencyKey: string, forceTimeout = false): Promise<{ success: boolean; transactionId: string; status: string }> {
-    this.logger.log(`Processing payment for ${amount} with key ${idempotencyKey}`);
-    
+  async processPayment(
+    amount: number,
+    idempotencyKey: string,
+    forceTimeout = false,
+  ): Promise<{ success: boolean; transactionId: string; status: string }> {
+    this.logger.log(
+      `Processing payment for ${amount} with key ${idempotencyKey}`,
+    );
+
     // forceTimeout (per-request) takes priority; fall back to global env var
-    const shouldTimeout = forceTimeout || process.env.SIMULATE_PAYMENT_TIMEOUT === 'true';
+    const shouldTimeout =
+      forceTimeout || process.env.SIMULATE_PAYMENT_TIMEOUT === 'true';
 
     return new Promise((resolve, reject) => {
       if (shouldTimeout) {
@@ -32,7 +39,7 @@ export class PaymentService {
         resolve({
           success: true,
           transactionId: `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          status: 'COMPLETED'
+          status: 'COMPLETED',
         });
       }, 1000);
     });

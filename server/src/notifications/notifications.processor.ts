@@ -11,10 +11,17 @@ export class NotificationsProcessor {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Process('send-notification')
-  async handleSendNotification(job: Job<{ recipient: string; payload: NotificationPayload }>) {
-    this.logger.log(`Processing job ${job.id}: Sending notification to ${job.data.recipient}`);
+  async handleSendNotification(
+    job: Job<{ recipient: string; payload: NotificationPayload }>,
+  ) {
+    this.logger.log(
+      `Processing job ${job.id}: Sending notification to ${job.data.recipient}`,
+    );
     try {
-      await this.notificationsService.executeSend(job.data.recipient, job.data.payload);
+      await this.notificationsService.executeSend(
+        job.data.recipient,
+        job.data.payload,
+      );
       this.logger.log(`Job ${job.id} completed successfully`);
     } catch (error) {
       this.logger.error(`Job ${job.id} failed: ${error.message}`);

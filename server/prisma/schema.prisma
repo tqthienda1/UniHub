@@ -45,22 +45,24 @@ model User {
 }
 
 model Workshop {
-  id             String         @id @default(uuid())
-  title          String
-  description    String?
-  category       String?
-  speakerName    String?        @map("speaker_name")
-  location       String?
-  room           String
-  startTime      DateTime       @map("start_time")
-  endTime        DateTime?      @map("end_time")
-  capacity       Int
-  availableSeats Int            @default(0) @map("available_seats")
-  price          Decimal        @default(0)
-  aiSummary      String?        @map("ai_summary")
-  status         WorkshopStatus @default(DRAFT)
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at")
+  id                  String         @id @default(uuid())
+  title               String
+  description         String?
+  category            String?
+  speakerName         String?        @map("speaker_name")
+  location            String?
+  room                String
+  startTime           DateTime       @map("start_time")
+  endTime             DateTime?      @map("end_time")
+  registrationOpenAt  DateTime?      @map("registration_open_at")
+  registrationCloseAt DateTime?      @map("registration_close_at")
+  capacity            Int
+  availableSeats      Int            @default(0) @map("available_seats")
+  price               Decimal        @default(0)
+  aiSummary           String?        @map("ai_summary")
+  status              WorkshopStatus @default(DRAFT)
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @default(now()) @updatedAt @map("updated_at")
 
 
   registrations WorkshopRegistration[]
